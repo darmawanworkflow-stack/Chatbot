@@ -21,7 +21,8 @@ Bot       : Terima kasih atas masukan Anda! 🙏☕
 - Kode diskon unik, contohnya `CAFE-7K3PQX`, berlaku **7 hari** (bisa diatur) dan hanya untuk **1x pakai**.
 - Kasir cukup mengirim `/cek KODE` atau `/pakai KODE` ke nomor bot untuk memeriksa dan menandai kode.
 - Pelanggan bisa mengetik `/batal` untuk berhenti. Survei otomatis batal jika 30 menit tidak dijawab.
-- Hasil survei tercatat di Google Sheets: tab **Respon** dan tab **Kode Diskon** dibuat otomatis.
+- Hasil survei tercatat di Google Sheets: tab **Respon**, **Kode Diskon**, dan **Pelanggan Promo** dibuat otomatis.
+- **Promo:** setelah menerima kode diskon, pelanggan ditanya apakah mau menerima info promo (opsional, diskon tetap diberikan apa pun jawabannya). Admin bisa mengirim promo ke semua pelanggan yang setuju.
 
 ## Perintah
 
@@ -29,10 +30,15 @@ Bot       : Terima kasih atas masukan Anda! 🙏☕
 |---|---|---|
 | Pelanggan | `/survei` | Mulai survei |
 | Pelanggan | `/batal` | Batalkan survei yang sedang berjalan |
+| Pelanggan | `STOP` | Berhenti menerima promo |
+| Pelanggan | `/langganan` | Mulai (lagi) menerima promo |
 | Kasir/admin | `/cek CAFE-XXXXXX` | Cek apakah kode masih valid |
 | Kasir/admin | `/pakai CAFE-XXXXXX` | Tandai kode sudah dipakai (setelah diskon diberikan) |
+| Admin | `/tespromo nama_template` | Kirim promo ke nomor admin sendiri untuk dicek |
+| Admin | `/promo nama_template` | Siapkan promo ke semua pelanggan yang setuju |
+| Admin | `/kirim` | Konfirmasi dan kirim promo (atau `/batal`) |
 
-Perintah kasir hanya berfungsi dari nomor yang terdaftar di `ADMIN_NUMBERS`.
+Perintah kasir/admin hanya berfungsi dari nomor yang terdaftar di `ADMIN_NUMBERS`.
 
 ---
 
@@ -101,6 +107,34 @@ Coba kirim `/survei` ke nomor bot. 🎉
 | `SURVEY_COOLDOWN_DAYS` | `30` | Jeda minimal antar survei per nomor (`0` = tanpa batas) |
 | `ADMIN_NUMBERS` | – | Nomor kasir, format `62...`, pisahkan dengan koma |
 | `TIMEZONE` | `Asia/Jakarta` | Zona waktu untuk tanggal di sheet dan pesan |
+| `PROMO_TEMPLATE_LANGUAGE` | `id` | Kode bahasa template promo di Meta |
+| `BROADCAST_DELAY_MS` | `200` | Jeda antar pesan saat mengirim promo |
+
+## Mengirim promo
+
+Pesan promo ke pelanggan yang tidak sedang chat (lebih dari 24 jam sejak pesan terakhirnya) **wajib memakai template yang disetujui Meta** dan **berbayar per pesan** (kategori *Marketing*). Bot hanya mengirim ke pelanggan dengan status **aktif** di tab *Pelanggan Promo*.
+
+1. **Buat template** di [business.facebook.com](https://business.facebook.com) > WhatsApp Manager > **Message templates** > Create template:
+   - Kategori: **Marketing**, bahasa: **Indonesian** (`id`).
+   - Nama huruf kecil dan garis bawah, misalnya `menu_baru_oktober`.
+   - Opsional: header **gambar**, dan `{{1}}` di isi pesan untuk nama pelanggan.
+   - Tambahkan tombol *Quick reply* bertuliskan **Stop promo** agar pelanggan mudah berhenti.
+   - Contoh isi: `Halo {{1}}! Menu baru Es Kopi Pandan sudah hadir di Cafe Kita ☕ Tunjukkan pesan ini untuk gratis upsize minggu ini.`
+2. Tunggu status **Approved**.
+3. Dari nomor admin, coba dulu:
+   ```
+   /tespromo menu_baru_oktober nama https://link-gambar-anda.jpg
+   ```
+   - Tambahkan `nama` hanya jika template memakai `{{1}}`.
+   - Tambahkan link gambar (https) hanya jika template memakai header gambar.
+4. Jika tampilannya sudah benar, kirim ke semua pelanggan:
+   ```
+   /promo menu_baru_oktober nama https://link-gambar-anda.jpg
+   /kirim
+   ```
+   Bot akan melaporkan jumlah yang berhasil dan gagal.
+
+Tips agar nomor tetap sehat: kirim promo **maksimal 2–4 kali sebulan**, isi yang benar-benar bermanfaat, dan jangan pernah mengirim ke nomor yang tidak setuju. Banyak blokir atau laporan dari pelanggan akan menurunkan kualitas nomor dan membatasi pengiriman.
 
 ## Mengubah pertanyaan
 
@@ -119,7 +153,8 @@ NPS                  : =(COUNTIF(Respon!I:I,">=9")-COUNTIF(Respon!I:I,"<=6"))/CO
 
 ## Biaya
 
-- Pesan WhatsApp: karena pelanggan yang memulai chat, balasan bot dalam 24 jam termasuk *service conversation* yang **gratis** menurut kebijakan harga Meta saat ini. Bot ini tidak mengirim pesan promosi (template).
+- Pesan survei: karena pelanggan yang memulai chat, balasan bot dalam 24 jam **gratis** menurut kebijakan harga Meta saat ini.
+- Pesan promo (template *Marketing*): **berbayar per pesan**, lihat harga terbaru untuk Indonesia di halaman *WhatsApp Business Platform Pricing* Meta.
 - Google Sheets: gratis.
 - Hosting: tergantung penyedia, mulai dari gratis atau beberapa dolar per bulan.
 
@@ -137,6 +172,7 @@ src/
   config.js         membaca variabel environment
   questions.js      daftar pertanyaan survei
   survey.js         alur percakapan, kode diskon, perintah kasir
+  promo.js          persetujuan promo, STOP, broadcast template
   whatsapp.js       klien WhatsApp Cloud API + parser webhook
   server.js         server Express (webhook, verifikasi tanda tangan)
   codes.js          pembuat kode diskon

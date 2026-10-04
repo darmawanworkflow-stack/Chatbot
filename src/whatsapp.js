@@ -35,6 +35,19 @@ function createWhatsAppClient({ token, phoneNumberId, apiVersion = 'v23.0', fetc
       });
     },
 
+    // Template pesan yang sudah disetujui Meta (wajib untuk pesan di luar jendela 24 jam).
+    sendTemplate(to, name, languageCode, components = []) {
+      return send({
+        to,
+        type: 'template',
+        template: {
+          name,
+          language: { code: languageCode },
+          ...(components.length ? { components } : {}),
+        },
+      });
+    },
+
     // Maksimal 10 baris, judul baris maksimal 24 karakter.
     sendList(to, body, buttonText, rows) {
       return send({

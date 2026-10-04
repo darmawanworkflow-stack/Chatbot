@@ -2,10 +2,12 @@
 function createMemoryStorage() {
   const responses = [];
   const codes = new Map();
+  const subscribers = new Map();
 
   return {
     responses,
     codes,
+    subscribers,
     async init() {},
 
     async getLastSurveyAt(phone) {
@@ -32,6 +34,20 @@ function createMemoryStorage() {
     async markCodeUsed(code, usedAt) {
       const record = codes.get(code);
       if (record) Object.assign(record, { status: 'terpakai', usedAt });
+    },
+
+    async getSubscriber(phone) {
+      const record = subscribers.get(phone);
+      return record ? { ...record } : null;
+    },
+
+    async setSubscriber({ phone, name, status, updatedAt, source }) {
+      const existing = subscribers.get(phone);
+      subscribers.set(phone, { phone, name: name || existing?.name || '', status, updatedAt, source });
+    },
+
+    async listSubscribers(status = 'aktif') {
+      return [...subscribers.values()].filter((s) => s.status === status).map((s) => ({ ...s }));
     },
   };
 }

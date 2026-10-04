@@ -1,5 +1,6 @@
 const { QUESTIONS, RATING_OPTIONS } = require('./questions');
 const { generateCode } = require('./codes');
+const { createPromo } = require('./promo');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 60 * 1000; // survei dianggap batal jika 30 menit tidak dijawab
@@ -8,6 +9,7 @@ const SKIP_ID = 'skip';
 function createSurveyBot({ wa, storage, config, now = () => new Date() }) {
   const sessions = new Map();
   const admins = new Set(config.adminNumbers);
+  const promo = createPromo({ wa, storage, config, now });
 
   const formatDate = (date) =>
     new Date(date).toLocaleDateString('id-ID', {
@@ -31,9 +33,18 @@ function createSurveyBot({ wa, storage, config, now = () => new Date() }) {
     const text = (msg.text || '').trim();
     const command = text.toLowerCase();
 
-    if (admins.has(msg.from) && /^\/(cek|pakai)\b/.test(command)) {
-      return handleAdmin(msg.from, text);
+    if (admins.has(msg.from)) {
+      if (/^\/(cek|pakai)\b/.test(command)) return handleAdmin(msg.from, text);
+      if (/^\/(promo|tespromo|kirim)\b/.test(command)) return promo.handleAdmin(msg.from, text);
+      if (command === '/batal' && promo.cancelPending(msg.from)) {
+        return wa.sendText(msg.from, 'Pengiriman promo dibatalkan.');
+      }
     }
+    if (promo.isStop(command)) {
+      sessions.delete(msg.from);
+      return promo.unsubscribe(msg);
+    }
+    if (promo.isJoin(command)) return promo.subscribe(msg);
     if (command === '/survei' || command === 'survei') {
       return startSurvey(msg);
     }
@@ -48,7 +59,12 @@ function createSurveyBot({ wa, storage, config, now = () => new Date() }) {
     }
 
     const session = getSession(msg.from);
-    if (session) return handleAnswer(session, msg);
+    if (session?.stage === 'consent') {
+      sessions.delete(msg.from);
+      if (await promo.handleConsentReply(msg)) return undefined;
+    } else if (session) {
+      return handleAnswer(session, msg);
+    }
 
     return wa.sendText(
       msg.from,
@@ -172,13 +188,19 @@ function createSurveyBot({ wa, storage, config, now = () => new Date() }) {
     });
     sessions.delete(session.from);
 
-    return wa.sendText(
+    await wa.sendText(
       session.from,
       `Terima kasih atas masukan Anda! 🙏☕\n\n` +
         `Kode diskon ${config.discountPercent}% Anda:\n*${code}*\n\n` +
         `Tunjukkan pesan ini ke kasir saat membayar.\n` +
         `Berlaku sampai ${formatDate(expiresAt)}, untuk 1x transaksi.`,
     );
+
+    // Pertanyaan promo diajukan setelah kode diberikan, agar jelas diskon tidak bergantung pada jawabannya.
+    if (await promo.shouldAskConsent(session.from)) {
+      sessions.set(session.from, { ...session, stage: 'consent', updatedAt: now() });
+      await promo.askConsent(session.from);
+    }
   }
 
   async function handleAdmin(from, text) {
@@ -217,7 +239,7 @@ function createSurveyBot({ wa, storage, config, now = () => new Date() }) {
     );
   }
 
-  return { handleMessage, sessions };
+  return { handleMessage, sessions, promoIdle: () => promo.idle() };
 }
 
 module.exports = { createSurveyBot };

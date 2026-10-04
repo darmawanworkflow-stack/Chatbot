@@ -13,7 +13,12 @@ function setup({ start = new Date('2026-10-04T03:00:00Z'), cooldownDays = 30 } =
     async sendText(to, body) { sent.push({ to, kind: 'text', body }); },
     async sendButtons(to, body, buttons) { sent.push({ to, kind: 'buttons', body, buttons }); },
     async sendList(to, body, buttonText, rows) { sent.push({ to, kind: 'list', body, rows }); },
+    async sendTemplate(to, name, language, components) {
+      if (failTemplateFor.has(to)) throw new Error('WhatsApp API 400: template error');
+      sent.push({ to, kind: 'template', name, language, components });
+    },
   };
+  const failTemplateFor = new Set();
   const clock = { now: start };
   const storage = createMemoryStorage();
   const bot = createSurveyBot({
@@ -28,23 +33,26 @@ function setup({ start = new Date('2026-10-04T03:00:00Z'), cooldownDays = 30 } =
       cooldownDays,
       adminNumbers: [ADMIN],
       timeZone: 'Asia/Jakarta',
+      promoLanguage: 'id',
+      broadcastDelayMs: 0,
     },
   });
   const say = (text, from = CUSTOMER) => bot.handleMessage({ from, name: 'Budi', text });
-  const tap = (replyId) => bot.handleMessage({ from: CUSTOMER, name: 'Budi', text: '', replyId });
-  return { bot, storage, sent, clock, say, tap, last: () => sent[sent.length - 1] };
+  const tap = (replyId, from = CUSTOMER) => bot.handleMessage({ from, name: 'Budi', text: '', replyId });
+  return { bot, storage, sent, clock, say, tap, failTemplateFor, last: () => sent[sent.length - 1] };
 }
 
-async function completeSurvey(t) {
-  await t.say('/survei');
-  await t.tap('rasa:5');
-  await t.tap('pelayanan:4');
-  await t.say('3'); // angka diketik juga diterima
-  await t.tap('kebersihan:5');
-  await t.tap('harga:4');
-  await t.say('9');
-  await t.say('Tambah menu non-kopi');
-  return t.last().body.match(/CAFE-[A-Z0-9]{6}/)[0];
+async function completeSurvey(t, from = CUSTOMER) {
+  await t.say('/survei', from);
+  await t.tap('rasa:5', from);
+  await t.tap('pelayanan:4', from);
+  await t.say('3', from); // angka diketik juga diterima
+  await t.tap('kebersihan:5', from);
+  await t.tap('harga:4', from);
+  await t.say('9', from);
+  await t.say('Tambah menu non-kopi', from);
+  const codeMsg = t.sent.findLast((m) => m.to === from && /CAFE-[A-Z0-9]{6}/.test(m.body || ''));
+  return codeMsg.body.match(/CAFE-[A-Z0-9]{6}/)[0];
 }
 
 test('alur survei lengkap menyimpan jawaban dan memberi kode diskon', async () => {
@@ -57,8 +65,10 @@ test('alur survei lengkap menyimpan jawaban dan memberi kode diskon', async () =
   });
   assert.equal(t.storage.responses[0].code, code);
   assert.equal(t.storage.codes.get(code).status, 'aktif');
-  assert.match(t.last().body, /diskon 2%/);
-  assert.equal(t.bot.sessions.size, 0);
+  assert.match(t.sent[t.sent.length - 2].body, /diskon 2%/);
+  // setelah kode diberikan, pelanggan ditanya soal promo
+  assert.equal(t.last().kind, 'buttons');
+  assert.deepEqual(t.last().buttons.map((b) => b.id), ['promo:ya', 'promo:tidak']);
 });
 
 test('pertanyaan rating dikirim sebagai daftar pilihan 1-5', async () => {
@@ -96,6 +106,7 @@ test('NPS menerima 0-10 dan saran bisa dilewati', async () => {
 test('satu nomor hanya bisa mengisi sekali dalam masa cooldown', async () => {
   const t = setup();
   await completeSurvey(t);
+  await t.tap('promo:tidak');
   t.clock.now = new Date('2026-10-20T03:00:00Z');
   await t.say('/survei');
   assert.match(t.last().body, /sudah mengisi survei/);
@@ -152,4 +163,92 @@ test('kode kedaluwarsa ditolak, dan pelanggan biasa tidak bisa /pakai', async ()
   assert.match(t.last().body, /kedaluwarsa/);
   await t.say('/cek CAFE-ZZZZZZ', ADMIN);
   assert.match(t.last().body, /tidak ditemukan/);
+});
+
+test('pelanggan setuju promo, lalu bisa STOP dan /langganan lagi', async () => {
+  const t = setup();
+  await completeSurvey(t);
+  await t.tap('promo:ya');
+  assert.equal(t.storage.subscribers.get(CUSTOMER).status, 'aktif');
+  assert.equal(t.bot.sessions.size, 0);
+
+  await t.say('STOP');
+  assert.equal(t.storage.subscribers.get(CUSTOMER).status, 'berhenti');
+  assert.match(t.last().body, /tidak akan menerima/);
+
+  await t.say('/langganan');
+  assert.equal(t.storage.subscribers.get(CUSTOMER).status, 'aktif');
+});
+
+test('menolak promo dicatat, dan tidak ditanya lagi di survei berikutnya', async () => {
+  const t = setup({ cooldownDays: 0 });
+  await completeSurvey(t);
+  await t.say('tidak');
+  assert.equal(t.storage.subscribers.get(CUSTOMER).status, 'menolak');
+
+  await completeSurvey(t);
+  assert.match(t.last().body, /Kode diskon/);
+});
+
+test('mengabaikan pertanyaan promo tidak mendaftarkan pelanggan', async () => {
+  const t = setup();
+  await completeSurvey(t);
+  await t.say('makasih ya');
+  assert.equal(t.storage.subscribers.size, 0);
+  assert.match(t.last().body, /Ketik \*\/survei\*/);
+});
+
+test('admin broadcast hanya ke pelanggan aktif, dengan konfirmasi /kirim', async () => {
+  const t = setup();
+  await completeSurvey(t, CUSTOMER);
+  await t.tap('promo:ya', CUSTOMER);
+  await completeSurvey(t, '6282222222222');
+  await t.tap('promo:ya', '6282222222222');
+  await completeSurvey(t, '6283333333333');
+  await t.tap('promo:tidak', '6283333333333');
+  await t.say('STOP', '6282222222222');
+  await completeSurvey(t, '6284444444444');
+  await t.tap('promo:ya', '6284444444444');
+
+  await t.say('/promo Bukan-Valid', ADMIN);
+  assert.match(t.last().body, /Format/);
+
+  await t.say('/promo menu_baru nama https://contoh.com/promo.jpg', ADMIN);
+  assert.match(t.last().body, /2 pelanggan/);
+  assert.equal(t.sent.filter((m) => m.kind === 'template').length, 0);
+
+  t.failTemplateFor.add('6284444444444');
+  await t.say('/kirim', ADMIN);
+  await t.bot.promoIdle();
+
+  const templates = t.sent.filter((m) => m.kind === 'template');
+  assert.deepEqual(templates.map((m) => m.to), [CUSTOMER]);
+  assert.equal(templates[0].name, 'menu_baru');
+  assert.deepEqual(templates[0].components, [
+    { type: 'header', parameters: [{ type: 'image', image: { link: 'https://contoh.com/promo.jpg' } }] },
+    { type: 'body', parameters: [{ type: 'text', text: 'Budi' }] },
+  ]);
+  assert.match(t.last().body, /Berhasil: 1\nGagal: 1/);
+
+  await t.say('/kirim', ADMIN);
+  assert.match(t.last().body, /Tidak ada promo/);
+});
+
+test('/tespromo mengirim ke admin saja, /batal membatalkan promo', async () => {
+  const t = setup();
+  await completeSurvey(t);
+  await t.tap('promo:ya');
+
+  await t.say('/tespromo menu_baru', ADMIN);
+  const templates = t.sent.filter((m) => m.kind === 'template');
+  assert.deepEqual(templates.map((m) => m.to), [ADMIN]);
+
+  await t.say('/promo menu_baru', ADMIN);
+  await t.say('/batal', ADMIN);
+  assert.match(t.last().body, /dibatalkan/);
+  await t.say('/kirim', ADMIN);
+  assert.match(t.last().body, /Tidak ada promo/);
+
+  await t.say('/promo menu_baru'); // bukan admin
+  assert.equal(t.sent.filter((m) => m.kind === 'template').length, 1);
 });
