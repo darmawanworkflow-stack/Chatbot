@@ -1,0 +1,19 @@
+{
+  "name": "cafe-survey-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Chatbot survei kepuasan pelanggan cafe via WhatsApp Cloud API, hasil disimpan ke Google Sheets, dengan kode diskon unik.",
+  "main": "src/index.js",
+  "private": true,
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --env-file=.env --watch src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "googleapis": "^144.0.0"
+  }
+}
