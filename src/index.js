@@ -24,7 +24,9 @@ async function main() {
   if (!config.whatsapp.appSecret) {
     console.warn('WHATSAPP_APP_SECRET kosong: tanda tangan webhook tidak diperiksa.');
   }
-  app.listen(config.port, () => console.log(`Chatbot survei berjalan di port ${config.port}`));
+  app.listen(config.port, config.host, () =>
+    console.log(`Chatbot survei berjalan di ${config.host}:${config.port}`),
+  );
 }
 
 main().catch((err) => {

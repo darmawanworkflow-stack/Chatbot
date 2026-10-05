@@ -1,4 +1,4 @@
-const { google } = require('googleapis');
+const { sheets: sheetsApi, auth: googleAuth } = require('@googleapis/sheets');
 const { QUESTIONS } = require('../questions');
 
 const RESPONSE_SHEET = 'Respon';
@@ -14,12 +14,12 @@ const SUBSCRIBER_HEADERS = ['Nomor WA', 'Nama', 'Status', 'Diperbarui', 'Sumber'
 const col = (index) => String.fromCharCode(65 + index);
 
 function createSheetsStorage({ spreadsheetId, credentials, keyFile, timeZone }) {
-  const auth = new google.auth.GoogleAuth({
+  const auth = new googleAuth.GoogleAuth({
     credentials,
     keyFile: credentials ? undefined : keyFile,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  const api = google.sheets({ version: 'v4', auth }).spreadsheets;
+  const api = sheetsApi({ version: 'v4', auth }).spreadsheets;
 
   const localTime = (date) => date.toLocaleString('sv-SE', { timeZone }); // "YYYY-MM-DD HH:MM:SS"
   const respLastCol = col(RESPONSE_HEADERS.length - 1);

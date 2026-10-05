@@ -86,6 +86,34 @@ Bot harus bisa diakses dari internet dengan HTTPS. Beberapa pilihan:
 - **VPS sendiri**: jalankan `npm start` dengan pm2 atau systemd di belakang Nginx + HTTPS.
 - **Uji coba lokal**: `npx ngrok http 3000`, lalu pakai URL https dari ngrok.
 
+### Alternatif: VPS sendiri (Ubuntu + Nginx)
+
+```bash
+# 1. Node.js 22 + pm2
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt install -y nodejs
+npm install -g pm2
+
+# 2. Ambil kode
+git clone -b <branch> https://github.com/<owner>/Chatbot.git /opt/chatbot
+cd /opt/chatbot && npm install --omit=dev
+
+# 3. Isi .env (PORT=3100, HOST=127.0.0.1, GOOGLE_APPLICATION_CREDENTIALS=/opt/chatbot/service-account.json, dst.)
+cp .env.example .env && nano .env
+
+# 4. Jalankan terus-menerus
+pm2 start src/index.js --name chatbot --node-args="--env-file=.env"
+pm2 save && pm2 startup
+
+# 5. Nginx + HTTPS (lihat deploy/nginx-bot.conf)
+cp deploy/nginx-bot.conf /etc/nginx/sites-available/bot   # ganti server_name
+ln -s /etc/nginx/sites-available/bot /etc/nginx/sites-enabled/bot
+nginx -t && systemctl reload nginx
+certbot --nginx -d bot.domainanda.com
+```
+
+Update kode: `cd /opt/chatbot && git pull && npm install --omit=dev && pm2 restart chatbot`.
+
 Setelah online, buka **WhatsApp > Configuration > Webhook** di dashboard Meta:
 
 - **Callback URL**: `https://alamat-bot-anda/webhook`

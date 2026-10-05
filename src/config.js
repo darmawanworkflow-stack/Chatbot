@@ -20,6 +20,7 @@ function loadConfig(env = process.env) {
 
   return {
     port: intEnv(env, 'PORT', 3000),
+    host: env.HOST || '0.0.0.0',
     whatsapp: {
       token: env.WHATSAPP_TOKEN,
       phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
