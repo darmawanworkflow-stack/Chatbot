@@ -4,7 +4,10 @@ const crypto = require('node:crypto');
 const { createApp } = require('../src/server');
 const { parseIncoming } = require('../src/whatsapp');
 
-const config = { whatsapp: { verifyToken: 'verif', appSecret: 'secret' } };
+const config = {
+  whatsapp: { verifyToken: 'verif', appSecret: 'secret' },
+  survey: { cafeName: 'Cafe <Uji>', privacyContact: 'halo@cafe.id' },
+};
 
 function payload(messages) {
   return {
@@ -66,5 +69,15 @@ test('POST webhook menolak tanda tangan salah dan membuang pesan duplikat', asyn
     await new Promise((r) => setTimeout(r, 50));
     assert.equal(received.length, 1);
     assert.equal(received[0].text, 'halo');
+  });
+});
+
+test('halaman /privacy menampilkan nama cafe dan kontak', async () => {
+  await withServer(null, async (base) => {
+    const res = await fetch(`${base}/privacy`);
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    assert.match(html, /Kebijakan Privasi Cafe &lt;Uji&gt;/);
+    assert.match(html, /halo@cafe\.id/);
   });
 });

@@ -45,6 +45,7 @@ function loadConfig(env = process.env) {
         .map((n) => n.replace(/\D/g, ''))
         .filter(Boolean),
       timeZone: env.TIMEZONE || 'Asia/Jakarta',
+      privacyContact: env.PRIVACY_CONTACT || '',
       promoLanguage: env.PROMO_TEMPLATE_LANGUAGE || 'id',
       broadcastDelayMs: intEnv(env, 'BROADCAST_DELAY_MS', 200),
     },

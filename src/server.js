@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const express = require('express');
 const { parseIncoming } = require('./whatsapp');
+const { privacyPage } = require('./privacy');
 
 function isValidSignature(appSecret, rawBody, header) {
   if (!header || !rawBody) return false;
@@ -35,6 +36,12 @@ function createApp({ config, bot, wa, logger = console }) {
   }
 
   app.get('/', (_req, res) => res.send('Chatbot survei aktif'));
+
+  const privacyHtml = privacyPage({
+    cafeName: config.survey?.cafeName || 'Kami',
+    contact: config.survey?.privacyContact,
+  });
+  app.get('/privacy', (_req, res) => res.type('html').send(privacyHtml));
 
   // Verifikasi webhook saat didaftarkan di dashboard Meta.
   app.get('/webhook', (req, res) => {

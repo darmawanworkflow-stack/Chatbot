@@ -122,6 +122,8 @@ Setelah online, buka **WhatsApp > Configuration > Webhook** di dashboard Meta:
 
 Coba kirim `/survei` ke nomor bot. 🎉
 
+**Publish app:** selama app berstatus *Unpublished*, Meta hanya mengirim webhook uji. Sebelum dipakai pelanggan, buka **App settings > Basic**, isi **Privacy Policy URL** dengan `https://alamat-bot-anda/privacy` (halaman ini disediakan bot; isi `PRIVACY_CONTACT` di `.env`), lalu klik **Publish**.
+
 ---
 
 ## Pengaturan (`.env`)
@@ -202,7 +204,8 @@ src/
   survey.js         alur percakapan, kode diskon, perintah kasir
   promo.js          persetujuan promo, STOP, broadcast template
   whatsapp.js       klien WhatsApp Cloud API + parser webhook
-  server.js         server Express (webhook, verifikasi tanda tangan)
+  server.js         server Express (webhook, verifikasi tanda tangan, /privacy)
+  privacy.js        halaman kebijakan privasi
   codes.js          pembuat kode diskon
   storage/sheets.js penyimpanan Google Sheets
   storage/memory.js penyimpanan sementara (uji coba/test)
