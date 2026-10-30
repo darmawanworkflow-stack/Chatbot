@@ -63,6 +63,17 @@ input double InpBreakBufferATR = 0.1;        // Buffer di atas/bawah level break
 input double InpMinRangeATR    = 2.0;        // Lebar range BB minimum utk sideways (x ATR)
 input int    InpExpiryBars     = 5;          // Pending order dihapus setelah N bar
 
+input group "=== Ladder stop order (mode ala video, searah tren) ==="
+input bool   InpUseLadder      = false;      // Saat trend: sebar Buy/Sell Stop bertingkat, bukan 1 limit
+input int    InpLadderLevels   = 3;          // Jumlah tingkat (maks 5)
+input double InpLadderStepATR  = 0.5;        // Jarak antar tingkat (x ATR)
+// Total risiko ladder = InpRiskPct (dibagi rata ke tiap tingkat). Set InpMaxPositions >= jumlah tingkat.
+
+input group "=== Filter timeframe lebih tinggi ==="
+input bool             InpUseHtf    = true;        // Trend/breakout hanya searah bias HTF
+input ENUM_TIMEFRAMES  InpHtf       = PERIOD_M15;  // Timeframe filter
+input int              InpHtfEma    = 50;          // EMA filter (close di atas EMA = bias naik)
+
 input group "=== Manajemen posisi ==="
 input double InpBEATR          = 0.7;        // Break-even setelah profit x ATR (0 = off)
 input int    InpBELockPts      = 5;          // Kunci profit saat break-even (points)
@@ -88,6 +99,9 @@ ENUM_REGIME regime  = REG_NONE;
 double gEmaF, gEmaS, gEmaFPrev, gAdx, gAtr, gRsi;
 double gBbU, gBbL, gBbM, gBwRatio, gDonH, gDonL;
 double gH1, gL1, gC1;
+int    hHtf = INVALID_HANDLE;
+int    gHtfBias = 0;      // +1 naik, -1 turun, 0 netral/tidak dipakai
+double gRiskDiv = 1.0;    // pembagi risiko (ladder)
 
 //+------------------------------------------------------------------+
 string TagOf(const ENUM_REGIME r)
@@ -135,6 +149,13 @@ int OnInit()
    hAtr  = iATR(_Symbol, _Period, InpAtrPeriod);
    hBb   = iBands(_Symbol, _Period, InpBbPeriod, 0, InpBbDev, PRICE_CLOSE);
    hRsi  = iRSI(_Symbol, _Period, InpRsiPeriod, PRICE_CLOSE);
+   if(InpUseHtf)
+      hHtf = iMA(_Symbol, InpHtf, InpHtfEma, 0, MODE_EMA, PRICE_CLOSE);
+   if(InpUseHtf && hHtf == INVALID_HANDLE)
+     {
+      Print("Gagal membuat indikator HTF");
+      return INIT_FAILED;
+     }
    if(hEmaF == INVALID_HANDLE || hEmaS == INVALID_HANDLE || hAdx == INVALID_HANDLE ||
       hAtr == INVALID_HANDLE || hBb == INVALID_HANDLE || hRsi == INVALID_HANDLE)
      {
@@ -149,7 +170,7 @@ int OnInit()
 
 void OnDeinit(const int reason)
   {
-   int hs[] = {hEmaF, hEmaS, hAdx, hAtr, hBb, hRsi};
+   int hs[] = {hEmaF, hEmaS, hAdx, hAtr, hBb, hRsi, hHtf};
    for(int i = 0; i < ArraySize(hs); i++)
       if(hs[i] != INVALID_HANDLE)
          IndicatorRelease(hs[i]);
@@ -208,6 +229,16 @@ bool Refresh()
    gH1 = iHigh(_Symbol, _Period, 1);
    gL1 = iLow(_Symbol, _Period, 1);
    gC1 = iClose(_Symbol, _Period, 1);
+
+   gHtfBias = 0;
+   if(InpUseHtf)
+     {
+      double e;
+      double c = iClose(_Symbol, InpHtf, 1);
+      if(!One(hHtf, 0, 1, e) || c <= 0)
+         return false;
+      gHtfBias = (c > e) ? 1 : -1;
+     }
    return true;
   }
 
@@ -329,7 +360,7 @@ double CalcLots(const double slDist)
    if(tv <= 0 || ts <= 0 || slDist <= 0)
       return 0;
    double lossPerLot = slDist / ts * tv;
-   double riskMoney  = AccountInfoDouble(ACCOUNT_EQUITY) * InpRiskPct / 100.0;
+   double riskMoney  = AccountInfoDouble(ACCOUNT_EQUITY) * InpRiskPct / 100.0 / gRiskDiv;
    double lots = NormalizeLots(riskMoney / lossPerLot);
    if(lots < vmin)
      {
@@ -406,6 +437,26 @@ bool Place(const ENUM_ORDER_TYPE type, double price, double slDist, double tpDis
 //+------------------------------------------------------------------+
 //| Strategi per kondisi pasar                                       |
 //+------------------------------------------------------------------+
+//--- ladder Buy/Sell Stop searah tren; risiko total dibagi rata
+void PlaceLadder(const bool buy, const double ref, const double sl, const double tp, const string tag)
+  {
+   int n = MathMax(1, MathMin(InpLadderLevels, 5));
+   int room = InpMaxPositions - CountPositions();
+   n = MathMin(n, room);
+   if(n <= 0)
+      return;
+   gRiskDiv = n;
+   for(int k = 1; k <= n; k++)
+     {
+      double off = k * InpLadderStepATR * gAtr;
+      if(buy)
+         Place(ORDER_TYPE_BUY_STOP, ref + off, sl, tp, tag);
+      else
+         Place(ORDER_TYPE_SELL_STOP, ref - off, sl, tp, tag);
+     }
+   gRiskDiv = 1.0;
+  }
+
 void PlaceForRegime()
   {
    if(CountPositions() >= InpMaxPositions)
@@ -422,8 +473,13 @@ void PlaceForRegime()
      {
       case REG_TREND_UP:
         {
-         if(!InpUseTrend || CountPending(tag) > 0)
+         if(!InpUseTrend || CountPending(tag) > 0 || gHtfBias < 0 && InpUseHtf)
             return;
+         if(InpUseLadder)
+           {
+            PlaceLadder(true, ask, sl, tp, tag);
+            break;
+           }
          double p = ask - InpPullbackATR * gAtr;
          if(p < gEmaS)
             return;
@@ -432,8 +488,13 @@ void PlaceForRegime()
         }
       case REG_TREND_DOWN:
         {
-         if(!InpUseTrend || CountPending(tag) > 0)
+         if(!InpUseTrend || CountPending(tag) > 0 || gHtfBias > 0 && InpUseHtf)
             return;
+         if(InpUseLadder)
+           {
+            PlaceLadder(false, bid, sl, tp, tag);
+            break;
+           }
          double p = bid + InpPullbackATR * gAtr;
          if(p > gEmaS)
             return;
@@ -454,14 +515,14 @@ void PlaceForRegime()
         }
       case REG_BREAKOUT_UP:
         {
-         if(!InpUseBreakout || CountPending(tag) > 0)
+         if(!InpUseBreakout || CountPending(tag) > 0 || gHtfBias < 0 && InpUseHtf)
             return;
          Place(ORDER_TYPE_BUY_STOP, gH1 + buf, sl, tp, tag);
          break;
         }
       case REG_BREAKOUT_DOWN:
         {
-         if(!InpUseBreakout || CountPending(tag) > 0)
+         if(!InpUseBreakout || CountPending(tag) > 0 || gHtfBias > 0 && InpUseHtf)
             return;
          Place(ORDER_TYPE_SELL_STOP, gL1 - buf, sl, tp, tag);
          break;

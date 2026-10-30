@@ -13,6 +13,10 @@ EA scalping untuk MetaTrader 5, dirancang untuk XAUUSD timeframe M1. EA membaca 
 
 Pending order milik kondisi lama otomatis dihapus saat kondisi berubah, dan dihapus juga setelah `InpExpiryBars` bar.
 
+## Opsi tambahan
+- **Filter HTF** (`InpUseHtf`, default aktif): trend dan breakout hanya searah bias M15 (close di atas/bawah EMA50). Sideways dan squeeze tidak terpengaruh.
+- **Ladder** (`InpUseLadder`, default mati): saat trend, EA menyebar 3 Buy Stop (atau Sell Stop) bertingkat 0.5 ATR searah tren, seperti di video. Risiko total tetap `InpRiskPct`, dibagi rata ke tiap tingkat. Naikkan `InpMaxPositions` ke ≥ jumlah tingkat.
+
 ## Manajemen risiko
 - Lot dihitung dari **risiko % equity ÷ jarak SL**, bukan digandakan seperti di video.
 - SL/TP berbasis ATR, break-even, trailing, dan tutup paksa setelah N bar.
