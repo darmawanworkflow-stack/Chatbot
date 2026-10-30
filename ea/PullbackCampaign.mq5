@@ -8,8 +8,8 @@
 //| lot terkecil 0.01 sudah berarti risiko ~30-60% per trade.        |
 //|                                                                  |
 //| Tester : kampanye virtual $10 diulang terus; tiap kampanye       |
-//|          selesai saat mencapai target atau modal tidak cukup     |
-//|          untuk 1 trade lagi. Ringkasan dicetak di Journal.       |
+//|          selesai saat mencapai target atau modal turun ke batas  |
+//|          habis (InpBustUSD). Ringkasan dicetak di Journal.       |
 //| Live   : modal = equity akun; EA berhenti saat target tercapai   |
 //|          atau equity tidak cukup untuk 1 trade lagi.             |
 //|                                                                  |
