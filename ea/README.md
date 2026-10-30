@@ -42,3 +42,31 @@ EA scalping untuk MetaTrader 5, dirancang untuk XAUUSD timeframe M1. Setiap cand
 2. Lihat statistik per strategi di tab Journal. Matikan strategi dengan PF < 1 lewat `InpUseTrend` / `InpUseRange` / `InpUseBreakout` / `InpUseSqueeze`.
 3. Optimasi beberapa parameter saja (mis. `InpSLATR`, `InpTPATR`, `InpAdxTrend`) di periode A, lalu uji tanpa diubah di periode B (walk-forward).
 4. Demo 2–4 minggu, lalu akun real kecil.
+
+---
+
+# Session ORB (`SessionORB.mq5`)
+
+EA kedua dengan satu hipotesis sederhana: **Opening Range Breakout** sesi London dan New York pada XAUUSD.
+
+Hasil uji `AdaptiveScalperM1` (Jul–Okt 2026, Exness Zero): tidak ada strategi yang konsisten positif sebelum komisi, dan hasilnya berbalik saat SL/TP diubah. EA itu disimpan sebagai arsip.
+
+## Cara kerja
+1. Catat high/low M1 selama jendela range (London: 00:00–07:00, New York: 11:00–13:30).
+2. Saat range selesai, pasang **Buy Stop** di atas high + buffer dan **Sell Stop** di bawah low − buffer. Satu terisi, yang lain dihapus (OCO).
+3. SL = 0.5 × lebar range, TP = 2 × SL. SL digeser ke entry setelah profit 1R.
+4. Pending dihapus di akhir jendela entry (London 11:00, NY 16:00). Semua posisi ditutup pukul 20:00.
+5. Range terlalu sempit (< 0.1 ATR harian) atau terlalu lebar (> 0.7 ATR harian) dilewati.
+
+Maksimal 2 trade per hari. Statistik per sesi (LO/NY) tercetak di Journal tester saat tes selesai.
+
+## Waktu server
+Semua jam memakai **waktu server broker**. Exness memakai GMT+0 (cek: bandingkan jam di Market Watch dengan jam GMT). London buka 07:00 GMT (musim panas Eropa) / 08:00 GMT (musim dingin). Kalau broker lain memakai GMT+2/+3, geser semua jam.
+
+## Uji
+| Tes | Periode | Gunanya |
+|---|---|---|
+| A | 2026.07.01 – 2026.08.31 | hasil pertama |
+| B | 2026.09.01 – 2026.10.29 | konfirmasi, **setelan tidak boleh diubah** |
+
+Layak dilanjutkan hanya bila A **dan** B positif setelah komisi. Satu backtest 2 bulan ≈ 80 trade, jadi sampelnya masih kecil. Kalau A dan B lolos, uji juga periode yang lebih panjang.
