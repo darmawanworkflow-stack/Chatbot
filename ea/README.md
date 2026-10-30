@@ -70,3 +70,48 @@ Semua jam memakai **waktu server broker**. Exness memakai GMT+0 (cek: bandingkan
 | B | 2026.09.01 – 2026.10.29 | konfirmasi, **setelan tidak boleh diubah** |
 
 Layak dilanjutkan hanya bila A **dan** B positif setelah komisi. Satu backtest 2 bulan ≈ 80 trade, jadi sampelnya masih kecil. Kalau A dan B lolos, uji juga periode yang lebih panjang.
+
+---
+
+# VideoScalper (`VideoScalper.mq5`)
+
+Scalping gaya video: **sesi singkat** (default 20 menit) dengan **modal kecil** (default $10), Buy Stop / Sell Stop berjarak dekat, lot naik mengikuti saldo sesi. **Risiko sangat tinggi.**
+
+## Model
+| Model | Cara kerja |
+|---|---|
+| Grid dua arah | N Buy Stop di atas + N Sell Stop di bawah harga, jarak `InpStepUSD`, dipasang ulang tiap menit (seperti video) |
+| Ladder searah tren | Hanya Buy Stop (atau Sell Stop) bila EMA20/50 M1 menunjukkan tren |
+| Straddle | Buy Stop di high N bar + Sell Stop di low N bar, OCO |
+
+Lot = `InpLotPer10` per $10 modal sesi (0.01 di $10, 0.10 di $100, dst., maks `InpMaxLot`).
+Sesi berhenti bila modal sesi mencapai `InpTargetMult`×, turun ke `InpBustUSD`, atau waktu habis. Semua posisi ditutup saat sesi selesai.
+
+## Live / demo
+`InpStartNow = true`: sesi dimulai saat EA dipasang dan berhenti sendiri. Untuk sesi baru, lepas lalu pasang ulang EA.
+
+## Menguji ratusan sesi di Strategy Tester
+Di tester, EA menjalankan sesi pada jam di `InpSessionTimes` setiap hari. **Setiap sesi mulai dari modal virtual $10**, terlepas dari saldo tester. Pakai **deposit 10000** agar margin tidak membatasi. Di akhir tes, Journal mencetak:
+```
+===== Ringkasan VideoScalper: 170 sesi, modal 10.00 per sesi =====
+Mencapai target 5x : ...
+Habis (<= 1.00)    : ...
+Rata-rata akhir ... (..x) | median ... | terbaik ...
+```
+**Rata-rata akhir > $10** berarti model itu menguntungkan bila diulang terus.
+
+## Mencari model terbaik (optimizer MT5)
+1. Settings: periode **2026.07.01 – 2026.08.31**, real ticks, deposit 10000, Optimization **"Slow complete algorithm"** (atau "Fast genetic" kalau terlalu lama), kriteria **"Custom max"**.
+2. Tab Inputs, centang kolom optimasi untuk:
+
+| Input | Start | Step | Stop |
+|---|---|---|---|
+| Model | 0 | 1 | 2 |
+| Jarak antar order | 0.5 | 0.5 | 2.0 |
+| Jumlah order per sisi | 1 | 2 | 3 |
+| TP = x jarak | 1 | 1 | 3 |
+| SL = x jarak | 1 | 1 | 2 |
+| Trailing = x jarak | 0 | 1 | 1 |
+
+3. Setelah selesai, urutkan tab **Optimization Results** berdasarkan **Custom**, lalu ekspor (klik kanan → Export to XML).
+4. Ambil 3 setelan teratas, uji masing-masing di **2026.09.01 – 2026.10.29** tanpa diubah. Yang tetap > 1.0x di periode kedua adalah kandidat. Kalau tidak ada yang bertahan, artinya tidak ada model yang benar-benar unggul, hanya beruntung di periode pertama.
