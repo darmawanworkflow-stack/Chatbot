@@ -15,3 +15,15 @@ Aturan: train = 70% data pertama (s/d Des 2025), test = 30% terakhir. Entry di o
 - Pullback EMA (yang lolos uji Jul–Okt 2026 di Strategy Tester) negatif di semua 9 setelan exit di train maupun test, setara entry acak.
 - Pola per jam: tidak ada yang konsisten; satu-satunya angka besar (jam 22) berasal dari celah harga saat pasar buka kembali, tidak bisa ditradingkan.
 - Gold naik +2.429 USD di periode train dan turun −598 USD di periode test.
+
+## Multi-timeframe (`mtf.py`)
+```bash
+python3 mtf.py XAUUSD_M5_20240101_20261030.csv   # 6 pemicu candle M5 x 8 filter M15/H1/H4 x 2 exit -> results_mtf.csv
+```
+Konteks timeframe besar hanya dari bar yang sudah tutup. Jalur sesi 07:00–18:00.
+
+- 96 varian; 5 positif di train dan test (≈ yang diharapkan dari kebetulan).
+- Statistik-t terbaik di train 1.21 (inside bar + tren H4 + pullback H1), negatif di test.
+- Filter keselarasan tren (M15+H1+H4 atau H1+H4) mengurangi kerugian dibanding tanpa filter, tetapi rata-ratanya tetap tidak positif setelah biaya.
+
+Catatan: versi pertama `mtf.py` membocorkan bar H1/H4 berikutnya (Series pandas diselaraskan ulang ke indeks yang sudah digeser), sehingga filter RSI/posisi range tampak sangat untung. Sudah diperbaiki dengan `.to_numpy()`; hasil di atas dari versi yang benar.
