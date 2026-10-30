@@ -16,7 +16,7 @@
 //| RISIKO SANGAT TINGGI.                                            |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.00"
+#property version   "1.01"
 #property description "Kampanye $10 -> $100 dengan sinyal Pullback EMA M5. Risiko sangat tinggi."
 
 #include <Trade\Trade.mqh>
@@ -25,6 +25,7 @@ input group "=== Kampanye ==="
 input double InpStartBank     = 10.0;       // Modal awal kampanye (USD)
 input double InpTarget        = 100.0;      // Target modal (USD)
 input double InpRiskFrac      = 0.33;       // Bagian modal yang dipertaruhkan per trade (0.33 = 33%)
+input double InpBustUSD       = 5.0;        // Kampanye dianggap habis bila modal <= (USD)
 
 input group "=== Sinyal & exit (sama dengan M5SignalLab) ==="
 input double InpSLATR         = 1.5;        // SL = x ATR(14) M5
@@ -241,9 +242,9 @@ void OnTick()
          EndCampaign(true);
          return;
         }
-      double atrNow = Buf(hAtr, 1);
-      double vmin = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-      if(atrNow > 0 && vmin * LossPerLot(InpSLATR * atrNow) >= bank)
+      // SL terlalu lebar untuk modal saat ini -> Enter() melewati sinyal dan menunggu;
+      // kampanye baru dianggap habis bila modal turun ke batas
+      if(bank <= InpBustUSD)
         {
          EndCampaign(false);
          return;

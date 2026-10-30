@@ -150,6 +150,6 @@ Hanya Pullback EMA yang lolos di kedua periode. Edge-nya tipis (~+0.04R/trade) d
 Tahap 2: kampanye **$10 → $100** dengan sinyal Pullback EMA M5 (aturan entry & exit sama dengan M5SignalLab).
 
 - Lot = `InpRiskFrac` × modal kampanye ÷ kerugian per lot di SL, minimal lot terkecil. Dengan $10, lot 0.01 sudah berarti risiko sekitar 30–60% per trade.
-- Kampanye selesai saat modal ≥ target, atau modal tidak cukup lagi untuk satu SL dengan lot terkecil.
+- Kampanye selesai saat modal ≥ target, atau modal turun ke `InpBustUSD` ($5). Bila SL dengan lot terkecil lebih besar dari modal, sinyal dilewati dan EA menunggu.
 - **Tester:** kampanye virtual $10 diulang terus sepanjang periode; Journal mencetak berapa yang mencapai target dan berapa yang habis. Pakai deposit 10000 agar margin tester tidak membatasi.
 - **Live:** modal = equity akun; EA berhenti sendiri saat target tercapai atau modal habis. Untuk $10, margin 0.01 lot gold di 1:500 sekitar $9, jadi butuh leverage lebih tinggi (mis. 1:1000 atau lebih).
