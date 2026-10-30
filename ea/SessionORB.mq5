@@ -10,7 +10,7 @@
 //| Semua jam memakai WAKTU SERVER broker.                           |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.01"
+#property version   "1.02"
 #property description "Session Opening Range Breakout (XAUUSD). Uji di Strategy Tester & demo dulu."
 
 #include <Trade\Trade.mqh>
@@ -56,6 +56,7 @@ int      hAtrD1 = INVALID_HANDLE;
 datetime lastBar = 0;
 string   SESS_TAGS[] = {"LO", "NY"};
 datetime sessDone[2];          // hari (00:00) saat sesi sudah diproses
+datetime sessTried[2];         // hari (00:00) saat sesi terakhir dicoba
 string   sessInfo[2];          // keterangan untuk dashboard
 string   sessWait[2];          // alasan terakhir sesi belum terpasang
 int      sessWaitR[2];
@@ -68,10 +69,14 @@ int      sessWaitR[2];
 #define R_NEWS     5
 #define R_PASSED   6
 #define R_SPREAD   7
-#define R_COUNT    8
+#define R_LOT      8
+#define R_MARGIN   9
+#define R_SEND     10
+#define R_COUNT    11
 string   REASON_NAMES[R_COUNT] = {"order dipasang", "data M1/ATR tidak tersedia", "data range kurang (libur)",
                                   "range terlalu sempit", "range terlalu lebar", "berita",
-                                  "harga sudah lewat level", "spread tinggi sampai jendela habis"};
+                                  "harga sudah lewat level", "spread tinggi sampai jendela habis",
+                                  "lot minimum > risiko % (SL terlalu lebar)", "margin tidak cukup", "order ditolak server"};
 int      reasonCnt[2][R_COUNT];
 
 void Note(const int s, const int r, const string msg)
@@ -142,6 +147,7 @@ int OnInit()
    for(int s = 0; s < 2; s++)
      {
       sessDone[s] = 0;
+      sessTried[s] = 0;
       sessInfo[s] = "-";
       sessWait[s] = "";
       sessWaitR[s] = R_NODATA;
@@ -237,7 +243,7 @@ double MinDist()
    return (MathMax(sl, fr) + 2) * _Point;
   }
 
-bool PlaceStop(const bool buy, double price, double slDist, const double rr, const string tag)
+int PlaceStop(const bool buy, double price, double slDist, const double rr, const string tag)
   {
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
@@ -245,7 +251,7 @@ bool PlaceStop(const bool buy, double price, double slDist, const double rr, con
    if(buy ? price < ask + md : price > bid - md)
      {
       PrintFormat("%s %s dilewati: harga sudah melewati level %.2f", tag, buy ? "Buy Stop" : "Sell Stop", price);
-      return false;
+      return R_PASSED;
      }
    slDist = MathMax(slDist, md);
    price  = NormalizeDouble(price, _Digits);
@@ -253,21 +259,21 @@ bool PlaceStop(const bool buy, double price, double slDist, const double rr, con
    double tp = NormalizeDouble(buy ? price + rr * slDist : price - rr * slDist, _Digits);
    double lots = CalcLots(slDist);
    if(lots <= 0)
-      return false;
+      return R_LOT;
 
    double margin = 0;
    if(OrderCalcMargin(buy ? ORDER_TYPE_BUY : ORDER_TYPE_SELL, _Symbol, lots, price, margin) &&
       margin > AccountInfoDouble(ACCOUNT_MARGIN_FREE) * 0.9)
      {
       Print("Margin tidak cukup, order dilewati.");
-      return false;
+      return R_MARGIN;
      }
    string cmt = "ORB|" + tag;
    bool ok = buy ? trade.BuyStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, cmt)
                  : trade.SellStop(lots, price, _Symbol, sl, tp, ORDER_TIME_GTC, 0, cmt);
    if(!ok)
       PrintFormat("%s gagal: %d %s", cmt, trade.ResultRetcode(), trade.ResultRetcodeDescription());
-   return ok;
+   return ok ? R_PLACED : R_SEND;
   }
 
 //+------------------------------------------------------------------+
@@ -361,9 +367,11 @@ bool SetupSession(const int s, const datetime rs, const datetime re)
 
    double buf = InpBufferPts * _Point;
    double slDist = InpSLFrac * range + buf;
-   bool b = PlaceStop(true, rHigh + buf, slDist, InpRR, tag);
-   bool sl = PlaceStop(false, rLow - buf, slDist, InpRR, tag);
-   Note(s, (b || sl) ? R_PLACED : R_PASSED,
+   int rb = PlaceStop(true, rHigh + buf, slDist, InpRR, tag);
+   int rsl = PlaceStop(false, rLow - buf, slDist, InpRR, tag);
+   bool b = rb == R_PLACED, sl = rsl == R_PLACED;
+   int reason = (b || sl) ? R_PLACED : (rb == R_PASSED ? rsl : rb);
+   Note(s, reason,
         StringFormat("range %.2f-%.2f (%.2f = %.2f x ATR) | buy stop %s | sell stop %s",
                      rLow, rHigh, range, ratio, b ? "OK" : "-", sl ? "OK" : "-"));
    return true;
@@ -388,7 +396,7 @@ void ProcessSessions()
       if(now >= ee)
         {
          // sesi jatuh tempo hari ini tapi tidak pernah selesai diproses
-         if(sessDone[s] != d0)
+         if(sessDone[s] != d0 && sessTried[s] == d0)
            {
             Note(s, sessWaitR[s], "tidak terpasang sampai jendela habis: " + sessWait[s]);
             sessDone[s] = d0;
@@ -400,6 +408,7 @@ void ProcessSessions()
       if(now >= re && sessDone[s] != d0)
         {
          sessWait[s] = "belum ada bar baru";
+         sessTried[s] = d0;
          if(SetupSession(s, rs, re))
             sessDone[s] = d0;
         }
