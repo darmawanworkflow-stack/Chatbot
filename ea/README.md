@@ -133,3 +133,23 @@ Tiga sinyal berjalan bersamaan dalam satu backtest (masing-masing maks 1 posisi)
 Journal mencetak hasil per sinyal dalam satuan R (biaya termasuk). Dengan target 3R, impas butuh win rate > 25%.
 
 **Lolos bila rata-rata R > 0 dan win rate ≥ 28% di Jul–Agu dan Sep–Okt.** Uji dengan deposit 10000, real ticks, input default.
+
+### Hasil M5SignalLab (input default, real ticks, Exness Zero)
+| Sinyal | Jul–Agu | Sep–Okt |
+|---|---|---|
+| London breakout | 22 trade, 18.2%, −0.282R | 28 trade, 32.1%, +0.136R |
+| **Pullback EMA** | **139 trade, 28.8%, +0.029R** | **134 trade, 31.3%, +0.049R** |
+| Momentum 4 jam | 83 trade, 32.5%, −0.021R | 82 trade, 28.0%, −0.021R |
+
+Hanya Pullback EMA yang lolos di kedua periode. Edge-nya tipis (~+0.04R/trade) dan secara statistik belum pasti lebih dari kebetulan.
+
+---
+
+# PullbackCampaign (`PullbackCampaign.mq5`)
+
+Tahap 2: kampanye **$10 → $100** dengan sinyal Pullback EMA M5 (aturan entry & exit sama dengan M5SignalLab).
+
+- Lot = `InpRiskFrac` × modal kampanye ÷ kerugian per lot di SL, minimal lot terkecil. Dengan $10, lot 0.01 sudah berarti risiko sekitar 30–60% per trade.
+- Kampanye selesai saat modal ≥ target, atau modal tidak cukup lagi untuk satu SL dengan lot terkecil.
+- **Tester:** kampanye virtual $10 diulang terus sepanjang periode; Journal mencetak berapa yang mencapai target dan berapa yang habis. Pakai deposit 10000 agar margin tester tidak membatasi.
+- **Live:** modal = equity akun; EA berhenti sendiri saat target tercapai atau modal habis. Untuk $10, margin 0.01 lot gold di 1:500 sekitar $9, jadi butuh leverage lebih tinggi (mis. 1:1000 atau lebih).
