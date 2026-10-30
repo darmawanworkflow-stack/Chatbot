@@ -27,3 +27,15 @@ Konteks timeframe besar hanya dari bar yang sudah tutup. Jalur sesi 07:00–18:0
 - Filter keselarasan tren (M15+H1+H4 atau H1+H4) mengurangi kerugian dibanding tanpa filter, tetapi rata-ratanya tetap tidak positif setelah biaya.
 
 Catatan: versi pertama `mtf.py` membocorkan bar H1/H4 berikutnya (Series pandas diselaraskan ulang ke indeks yang sudah digeser), sehingga filter RSI/posisi range tampak sangat untung. Sudah diperbaiki dengan `.to_numpy()`; hasil di atas dari versi yang benar.
+
+## Berita USD (`news.py`, `newsfilter.py`)
+Kalender diekspor dengan `ExportCalendar.mq5` (5.069 berita USD, 1.402 high-impact, Jan 2024 – Okt 2026).
+```bash
+python3 news.py XAUUSD_M5_20240101_20261030.csv calendar_USD.csv
+python3 newsfilter.py XAUUSD_M5_20240101_20261030.csv calendar_USD.csv
+```
+- Gerak 5 menit setelah berita high rata-rata $4.63 vs $2.98 di jam yang sama tanpa berita; setelah 60 menit selisihnya kecil ($9.95 vs $8.31).
+- Bar 5 menit pertama sudah bergerak searah surprise (gold berlawanan USD) pada 67% rilis. Masuk setelah bar pertama searah surprise: negatif di train dan test (pasar sudah menyerapnya).
+- Mengikuti arah bar pertama: negatif. Melawannya: tidak konsisten (−0.34 train, +0.91 test USD/oz).
+- Menghindari jendela berita (−30/+60 menit) tidak memperbaiki sinyal mana pun.
+- Pullback EMA **hanya** di jendela berita: +0.063R train / +0.238R test (~500 trade). Belum signifikan secara statistik, dan biaya saat berita kemungkinan diremehkan (spread & slippage melebar). Hipotesis untuk diuji maju, bukan bukti.
