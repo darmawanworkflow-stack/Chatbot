@@ -10,7 +10,7 @@
 //| Semua jam memakai WAKTU SERVER broker.                           |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.00"
+#property version   "1.01"
 #property description "Session Opening Range Breakout (XAUUSD). Uji di Strategy Tester & demo dulu."
 
 #include <Trade\Trade.mqh>
@@ -57,6 +57,30 @@ datetime lastBar = 0;
 string   SESS_TAGS[] = {"LO", "NY"};
 datetime sessDone[2];          // hari (00:00) saat sesi sudah diproses
 string   sessInfo[2];          // keterangan untuk dashboard
+string   sessWait[2];          // alasan terakhir sesi belum terpasang
+int      sessWaitR[2];
+//--- penghitung keputusan per sesi
+#define R_PLACED   0
+#define R_NODATA   1
+#define R_HOLIDAY  2
+#define R_SMALL    3
+#define R_BIG      4
+#define R_NEWS     5
+#define R_PASSED   6
+#define R_SPREAD   7
+#define R_COUNT    8
+string   REASON_NAMES[R_COUNT] = {"order dipasang", "data M1/ATR tidak tersedia", "data range kurang (libur)",
+                                  "range terlalu sempit", "range terlalu lebar", "berita",
+                                  "harga sudah lewat level", "spread tinggi sampai jendela habis"};
+int      reasonCnt[2][R_COUNT];
+
+void Note(const int s, const int r, const string msg)
+  {
+   sessInfo[s] = msg;
+   if(r >= 0)
+      reasonCnt[s][r]++;
+   Print("[", SESS_TAGS[s], "] ", TimeToString(TimeCurrent(), TIME_DATE), " ", msg);
+  }
 
 //+------------------------------------------------------------------+
 int ParseHHMM(const string s)
@@ -119,6 +143,10 @@ int OnInit()
      {
       sessDone[s] = 0;
       sessInfo[s] = "-";
+      sessWait[s] = "";
+      sessWaitR[s] = R_NODATA;
+      for(int r = 0; r < R_COUNT; r++)
+         reasonCnt[s][r] = 0;
      }
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetDeviationInPoints(InpSlippage);
@@ -286,10 +314,14 @@ bool SetupSession(const int s, const datetime rs, const datetime re)
    int nh = CopyHigh(_Symbol, PERIOD_M1, rs, re - 1, hi);
    int nl = CopyLow(_Symbol, PERIOD_M1, rs, re - 1, lo);
    if(nh <= 0 || nl <= 0)
+     {
+      sessWait[s] = StringFormat("CopyHigh/Low gagal (err %d)", GetLastError());
+      sessWaitR[s] = R_NODATA;
       return false;                       // data belum siap, coba lagi bar berikutnya
+     }
    if(nh < need / 2)
      {
-      sessInfo[s] = "data range kurang (libur?)";
+      Note(s, R_HOLIDAY, StringFormat("data range kurang: %d dari %d bar", nh, need));
       return true;
      }
    double rHigh = hi[ArrayMaximum(hi)];
@@ -298,23 +330,32 @@ bool SetupSession(const int s, const datetime rs, const datetime re)
 
    double atr[1];
    if(CopyBuffer(hAtrD1, 0, 1, 1, atr) != 1 || atr[0] <= 0)
-      return false;
-   if(range < InpMinRangeD1 * atr[0] || range > InpMaxRangeD1 * atr[0])
      {
-      sessInfo[s] = StringFormat("range %.2f di luar batas (%.2f-%.2f)", range, InpMinRangeD1 * atr[0], InpMaxRangeD1 * atr[0]);
+      sessWait[s] = StringFormat("ATR D1 belum tersedia (err %d)", GetLastError());
+      sessWaitR[s] = R_NODATA;
+      return false;
+     }
+   double ratio = range / atr[0];
+   if(ratio < InpMinRangeD1 || ratio > InpMaxRangeD1)
+     {
+      Note(s, ratio < InpMinRangeD1 ? R_SMALL : R_BIG,
+           StringFormat("range %.2f = %.2f x ATR D1 (%.2f), batas %.2f-%.2f -> dilewati",
+                        range, ratio, atr[0], InpMinRangeD1, InpMaxRangeD1));
       return true;
      }
 
    string news;
    if(NewsBlocked(news))
      {
-      sessInfo[s] = "dilewati, berita: " + news;
+      Note(s, R_NEWS, "dilewati, berita: " + news);
       return true;
      }
    double spreadPts = (SymbolInfoDouble(_Symbol, SYMBOL_ASK) - SymbolInfoDouble(_Symbol, SYMBOL_BID)) / _Point;
    if(spreadPts > InpMaxSpreadPts)
      {
       sessInfo[s] = StringFormat("menunggu spread turun (%.0f)", spreadPts);
+      sessWait[s] = StringFormat("spread %.0f > %d", spreadPts, InpMaxSpreadPts);
+      sessWaitR[s] = R_SPREAD;
       return false;                       // coba lagi bar berikutnya sampai jendela entry habis
      }
 
@@ -322,8 +363,9 @@ bool SetupSession(const int s, const datetime rs, const datetime re)
    double slDist = InpSLFrac * range + buf;
    bool b = PlaceStop(true, rHigh + buf, slDist, InpRR, tag);
    bool sl = PlaceStop(false, rLow - buf, slDist, InpRR, tag);
-   sessInfo[s] = StringFormat("range %.2f-%.2f (%.2f) | buy stop %s | sell stop %s",
-                              rLow, rHigh, range, b ? "OK" : "-", sl ? "OK" : "-");
+   Note(s, (b || sl) ? R_PLACED : R_PASSED,
+        StringFormat("range %.2f-%.2f (%.2f = %.2f x ATR) | buy stop %s | sell stop %s",
+                     rLow, rHigh, range, ratio, b ? "OK" : "-", sl ? "OK" : "-"));
    return true;
   }
 
@@ -345,12 +387,19 @@ void ProcessSessions()
       datetime ee = d0 + ParseHHMM(eeS[s]) * 60;
       if(now >= ee)
         {
+         // sesi jatuh tempo hari ini tapi tidak pernah selesai diproses
+         if(sessDone[s] != d0)
+           {
+            Note(s, sessWaitR[s], "tidak terpasang sampai jendela habis: " + sessWait[s]);
+            sessDone[s] = d0;
+           }
          if(CountPending(SESS_TAGS[s]) > 0)
             CancelPending(SESS_TAGS[s]);
          continue;
         }
       if(now >= re && sessDone[s] != d0)
         {
+         sessWait[s] = "belum ada bar baru";
          if(SetupSession(s, rs, re))
             sessDone[s] = d0;
         }
@@ -489,6 +538,11 @@ void PrintStats()
       else
          gl[k] += -pnet[j];
      }
+   Print("===== Keputusan per sesi (berapa hari) =====");
+   for(int k = 0; k < 2; k++)
+      for(int r = 0; r < R_COUNT; r++)
+         if(reasonCnt[k][r] > 0)
+            PrintFormat("%s  %-38s %4d", SESS_TAGS[k], REASON_NAMES[r], reasonCnt[k][r]);
    Print("===== Statistik ORB per sesi (", _Symbol, ", magic ", InpMagic, ") =====");
    Print("Sesi  Trades  Win%    Net        PF");
    for(int k = 0; k < 2; k++)
