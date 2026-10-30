@@ -473,7 +473,7 @@ void PlaceForRegime()
      {
       case REG_TREND_UP:
         {
-         if(!InpUseTrend || CountPending(tag) > 0 || gHtfBias < 0 && InpUseHtf)
+         if(!InpUseTrend || CountPending(tag) > 0 || (gHtfBias < 0 && InpUseHtf))
             return;
          if(InpUseLadder)
            {
@@ -488,7 +488,7 @@ void PlaceForRegime()
         }
       case REG_TREND_DOWN:
         {
-         if(!InpUseTrend || CountPending(tag) > 0 || gHtfBias > 0 && InpUseHtf)
+         if(!InpUseTrend || CountPending(tag) > 0 || (gHtfBias > 0 && InpUseHtf))
             return;
          if(InpUseLadder)
            {
@@ -515,14 +515,14 @@ void PlaceForRegime()
         }
       case REG_BREAKOUT_UP:
         {
-         if(!InpUseBreakout || CountPending(tag) > 0 || gHtfBias < 0 && InpUseHtf)
+         if(!InpUseBreakout || CountPending(tag) > 0 || (gHtfBias < 0 && InpUseHtf))
             return;
          Place(ORDER_TYPE_BUY_STOP, gH1 + buf, sl, tp, tag);
          break;
         }
       case REG_BREAKOUT_DOWN:
         {
-         if(!InpUseBreakout || CountPending(tag) > 0 || gHtfBias > 0 && InpUseHtf)
+         if(!InpUseBreakout || CountPending(tag) > 0 || (gHtfBias > 0 && InpUseHtf))
             return;
          Place(ORDER_TYPE_SELL_STOP, gL1 - buf, sl, tp, tag);
          break;
