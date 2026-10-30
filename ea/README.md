@@ -153,3 +153,17 @@ Tahap 2: kampanye **$10 → $100** dengan sinyal Pullback EMA M5 (aturan entry &
 - Kampanye selesai saat modal ≥ target, atau modal turun ke `InpBustUSD` ($5). Bila SL dengan lot terkecil lebih besar dari modal, sinyal dilewati dan EA menunggu.
 - **Tester:** kampanye virtual $10 diulang terus sepanjang periode; Journal mencetak berapa yang mencapai target dan berapa yang habis. Pakai deposit 10000 agar margin tester tidak membatasi.
 - **Live:** modal = equity akun; EA berhenti sendiri saat target tercapai atau modal habis. Untuk $10, margin 0.01 lot gold di 1:500 sekitar $9, jadi butuh leverage lebih tinggi (mis. 1:1000 atau lebih).
+
+---
+
+# NewsPullbackArrows (`NewsPullbackArrows.mq5`, indikator)
+
+Panah sinyal M5 untuk satu-satunya hipotesis yang tersisa dari riset (`ea/research`): **pullback searah tren H1 di jendela berita USD high-impact** (30 menit sebelum s/d 60 menit sesudah rilis, jam 07:00–18:00 server). Aturannya sama persis dengan riset: masuk di open candle berikutnya, SL 1.5 × ATR(14), TP 3R, tutup paksa setelah 48 candle.
+
+- Panah hijau/merah = sinyal saat berita, dengan garis entry/SL/TP untuk sinyal-sinyal terakhir.
+- `InpShowNonNews = true` menampilkan sinyal di luar berita sebagai panah abu-abu (pembanding; di riset hasilnya negatif).
+- Pojok kiri atas: status jendela berita, berita berikutnya, dan hasil historis sinyal di chart dalam R (biaya `InpCostUSD` termasuk).
+- Alert popup dan notifikasi HP saat sinyal baru.
+- Jadwal berita: salin `calendar_USD.csv` (hasil `ExportCalendar.mq5`) ke `MQL5/Files`, ditambah kalender MT5 langsung untuk berita terbaru dan mendatang.
+
+**Hipotesis, belum terbukti.** Catat setiap sinyal di demo 2–3 bulan sebelum memakai uang sungguhan.
