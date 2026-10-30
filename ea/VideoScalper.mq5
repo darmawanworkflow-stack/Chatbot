@@ -14,7 +14,7 @@
 //| menit. Gunakan hanya uang yang siap hilang seluruhnya.           |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.00"
+#property version   "1.10"
 #property description "Sesi scalping singkat bermodal kecil (gaya video). Risiko sangat tinggi."
 
 #include <Trade\Trade.mqh>
@@ -37,6 +37,7 @@ input double InpBustUSD        = 1.0;        // Berhenti bila modal sesi turun k
 input group "=== Model ==="
 input ENUM_MODEL InpModel      = MODEL_GRID; // Model
 input double InpStepUSD        = 1.0;        // Jarak antar order (USD harga gold)
+input double InpGridOffset     = 0.5;        // Level grid di kelipatan jarak + offset (0.5 -> x.50 seperti video)
 input int    InpLevels         = 3;          // Jumlah order per sisi
 input double InpTPSteps        = 1.0;        // TP = x jarak
 input double InpSLSteps        = 2.0;        // SL = x jarak (0 = tanpa SL, hanya batas modal sesi)
@@ -51,7 +52,7 @@ input double InpMaxLot         = 2.0;        // Lot maksimum per order
 input int    InpMaxPositions   = 6;          // Maks posisi terbuka
 
 input group "=== Lain-lain ==="
-input int    InpMaxSpreadPts   = 40;         // Spread maks untuk memasang order (points)
+input double InpMaxSpreadUSD   = 0.30;       // Spread maks untuk memasang order (USD harga)
 input long   InpMagic          = 20261031;   // Magic number
 input int    InpSlippage       = 30;         // Slippage (points)
 
@@ -66,6 +67,7 @@ datetime slotDone[];
 bool     inSess   = false;
 bool     liveDone = false;
 datetime sessStart = 0, sessEnd = 0, lastBar = 0;
+double   lastSyncPx = 0;
 double   sessBank  = 0;      // modal awal sesi berjalan
 double   sessRealized = 0;   // profit+komisi deal yang sudah terjadi di sesi ini
 double   sessPeak = 0;
@@ -226,46 +228,104 @@ int TrendDir()
    return 0;
   }
 
-//--- pasang ulang semua pending di sekitar harga sekarang
-void RefreshOrders()
+bool SpreadOK()
   {
-   CancelPending();
-   int room = InpMaxPositions - CountPositions();
-   if(room <= 0)
-      return;
+   return SymbolInfoDouble(_Symbol, SYMBOL_ASK) - SymbolInfoDouble(_Symbol, SYMBOL_BID) <= InpMaxSpreadUSD;
+  }
+
+//--- ada posisi searah yang dibuka di sekitar level ini?
+bool HasPosAt(const bool buy, const double level)
+  {
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+      if(PositionGetTicket(i) > 0 && PositionGetString(POSITION_SYMBOL) == _Symbol &&
+         PositionGetInteger(POSITION_MAGIC) == InpMagic &&
+         (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) == buy &&
+         MathAbs(PositionGetDouble(POSITION_PRICE_OPEN) - level) < InpStepUSD * 0.5)
+         return true;
+   return false;
+  }
+
+bool HasOrderAt(const bool buy, const double level)
+  {
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+      if(OrderGetTicket(i) > 0 && OrderGetString(ORDER_SYMBOL) == _Symbol &&
+         OrderGetInteger(ORDER_MAGIC) == InpMagic &&
+         (OrderGetInteger(ORDER_TYPE) == ORDER_TYPE_BUY_STOP) == buy &&
+         MathAbs(OrderGetDouble(ORDER_PRICE_OPEN) - level) < InpStepUSD * 0.1)
+         return true;
+   return false;
+  }
+
+//--- grid tetap di level kelipatan jarak (seperti video): order yang sudah ada tidak digeser,
+//    hanya level baru ditambah saat harga bergerak dan level yang terlalu jauh dihapus
+void SyncLattice(const bool doBuy, const bool doSell)
+  {
+   double S   = InpStepUSD;
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   if((ask - bid) / _Point > InpMaxSpreadPts)
-      return;
+   double md  = MinDist();
    double lots = SessLots();
-   double S = InpStepUSD;
-   int lv = (int)MathMin(InpLevels, room);
+   bool full = CountPositions() >= InpMaxPositions;
+   int lv = InpLevels;
 
+   double up = MathCeil((ask + md - InpGridOffset) / S) * S + InpGridOffset;
+   if(up < ask + md)
+      up += S;
+   double dn = MathFloor((bid - md - InpGridOffset) / S) * S + InpGridOffset;
+   if(dn > bid - md)
+      dn -= S;
+   double eps = S * 0.1;
+
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+     {
+      ulong tk = OrderGetTicket(i);
+      if(tk == 0 || OrderGetString(ORDER_SYMBOL) != _Symbol || OrderGetInteger(ORDER_MAGIC) != InpMagic)
+         continue;
+      bool   b  = OrderGetInteger(ORDER_TYPE) == ORDER_TYPE_BUY_STOP;
+      double p  = OrderGetDouble(ORDER_PRICE_OPEN);
+      bool keep = !full && MathAbs(OrderGetDouble(ORDER_VOLUME_INITIAL) - lots) < 1e-8 &&
+                  (b ? doBuy && p <= up + (lv - 1) * S + eps
+                     : doSell && p >= dn - (lv - 1) * S - eps);
+      if(!keep)
+         trade.OrderDelete(tk);
+     }
+   if(full || !SpreadOK())
+      return;
+   for(int k = 0; k < lv; k++)
+     {
+      double lu = NormalizeDouble(up + k * S, _Digits);
+      double ld = NormalizeDouble(dn - k * S, _Digits);
+      if(doBuy && !HasOrderAt(true, lu) && !HasPosAt(true, lu))
+         PlaceStop(true, lu, lots);
+      if(doSell && !HasOrderAt(false, ld) && !HasPosAt(false, ld))
+         PlaceStop(false, ld, lots);
+     }
+  }
+
+void RefreshOrders()
+  {
    switch(InpModel)
      {
       case MODEL_GRID:
-         for(int k = 1; k <= lv; k++)
-           {
-            PlaceStop(true, ask + k * S, lots);
-            PlaceStop(false, bid - k * S, lots);
-           }
+         SyncLattice(true, true);
          break;
       case MODEL_TREND:
         {
          int d = TrendDir();
-         for(int k = 1; k <= lv && d != 0; k++)
-            PlaceStop(d > 0, d > 0 ? ask + k * S : bid - k * S, lots);
+         SyncLattice(d > 0, d < 0);
          break;
         }
       case MODEL_STRADDLE:
         {
-         if(CountPositions() > 0)
+         CancelPending();
+         if(CountPositions() > 0 || !SpreadOK())
             break;
          double hi[], lo[];
          if(CopyHigh(_Symbol, PERIOD_M1, 1, InpLookback, hi) != InpLookback ||
             CopyLow(_Symbol, PERIOD_M1, 1, InpLookback, lo) != InpLookback)
             break;
-         double buf = 0.1 * S;
+         double lots = SessLots();
+         double buf = 0.1 * InpStepUSD;
          PlaceStop(true, hi[ArrayMaximum(hi)] + buf, lots);
          PlaceStop(false, lo[ArrayMinimum(lo)] - buf, lots);
          break;
@@ -384,9 +444,12 @@ void OnTick()
         {
          Trail();
          datetime b = iTime(_Symbol, PERIOD_M1, 0);
-         if(b != lastBar)
+         double px = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+         bool moved = InpModel != MODEL_STRADDLE && MathAbs(px - lastSyncPx) >= InpStepUSD * 0.5;
+         if(b != lastBar || moved)
            {
             lastBar = b;
+            lastSyncPx = px;
             RefreshOrders();
            }
          if(!IsTester())
@@ -427,7 +490,7 @@ void PrintSummary()
    int n = ArraySize(resFinal);
    if(n == 0)
       return;
-   int nT = 0, nB = 0, nW = 0;
+   int nT = 0, nB = 0, nW = 0, nFlat = 0;
    double sum = 0, best = 0;
    int buckets[6] = {0, 0, 0, 0, 0, 0};
    for(int i = 0; i < n; i++)
@@ -439,6 +502,8 @@ void PrintSummary()
       else
          nW++;
       sum += resFinal[i];
+      if(MathAbs(resFinal[i] - InpBankroll) < 0.005)
+         nFlat++;
       best = MathMax(best, resFinal[i]);
       double m = resFinal[i] / InpBankroll;
       int b = m < 0.5 ? 0 : m < 1.0 ? 1 : m < 2.0 ? 2 : m < 5.0 ? 3 : m < 10.0 ? 4 : 5;
@@ -451,7 +516,7 @@ void PrintSummary()
    Print("===== Ringkasan VideoScalper: ", n, " sesi, modal ", DoubleToString(InpBankroll, 2), " per sesi =====");
    PrintFormat("Mencapai target %.0fx : %4d (%.1f%%)", InpTargetMult, nT, 100.0 * nT / n);
    PrintFormat("Habis (<= %.2f)      : %4d (%.1f%%)", InpBustUSD, nB, 100.0 * nB / n);
-   PrintFormat("Selesai karena waktu : %4d (%.1f%%)", nW, 100.0 * nW / n);
+   PrintFormat("Selesai karena waktu : %4d (%.1f%%), %d di antaranya tanpa trade", nW, 100.0 * nW / n, nFlat);
    PrintFormat("Rata-rata akhir %.2f (%.2fx) | median %.2f | terbaik %.2f", sum / n, sum / n / InpBankroll, median, best);
    string lbl[6] = {"< 0.5x", "0.5-1x", "1-2x", "2-5x", "5-10x", ">= 10x"};
    for(int b = 0; b < 6; b++)

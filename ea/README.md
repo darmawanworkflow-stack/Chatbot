@@ -80,7 +80,7 @@ Scalping gaya video: **sesi singkat** (default 20 menit) dengan **modal kecil** 
 ## Model
 | Model | Cara kerja |
 |---|---|
-| Grid dua arah | N Buy Stop di atas + N Sell Stop di bawah harga, jarak `InpStepUSD`, dipasang ulang tiap menit (seperti video) |
+| Grid dua arah | N Buy Stop di atas + N Sell Stop di bawah harga pada level tetap kelipatan `InpStepUSD` (mis. x.50 seperti video). Order tidak digeser; level baru ditambah saat harga bergerak |
 | Ladder searah tren | Hanya Buy Stop (atau Sell Stop) bila EMA20/50 M1 menunjukkan tren |
 | Straddle | Buy Stop di high N bar + Sell Stop di low N bar, OCO |
 
