@@ -19,7 +19,7 @@
 //| HIPOTESIS, BELUM TERBUKTI. Untuk uji maju di akun demo.          |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.00"
+#property version   "1.01"
 #property description "Panah pullback M5 di jendela berita USD. Hipotesis riset, uji di demo."
 #property indicator_chart_window
 #property indicator_buffers 4
@@ -260,6 +260,15 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
                 const double &open[], const double &high[], const double &low[], const double &close[],
                 const long &tick_volume[], const long &volume[], const int &spread[])
   {
+   if(_Period != PERIOD_M5)
+     {
+      // sinyal dan statistik hanya bermakna di M5 (sesuai riset)
+      for(int i = MathMax(0, prev_calculated - 1); i < rates_total; i++)
+         BuyNews[i] = SellNews[i] = BuyOther[i] = SellOther[i] = EMPTY_VALUE;
+      ObjectsDeleteAll(0, PFX);
+      Comment("NewsPullbackArrows: GANTI CHART KE M5.\nIndikator ini hanya berlaku di timeframe M5; di timeframe lain tidak menggambar sinyal.");
+      return rates_total;
+     }
    if(rates_total < 200)
       return 0;
    bool newBar = prev_calculated == 0 || rates_total != prev_calculated;
