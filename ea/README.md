@@ -115,3 +115,21 @@ Rata-rata akhir ... (..x) | median ... | terbaik ...
 
 3. Setelah selesai, urutkan tab **Optimization Results** berdasarkan **Custom**, lalu ekspor (klik kanan → Export to XML).
 4. Ambil 3 setelan teratas, uji masing-masing di **2026.09.01 – 2026.10.29** tanpa diubah. Yang tetap > 1.0x di periode kedua adalah kandidat. Kalau tidak ada yang bertahan, artinya tidak ada model yang benar-benar unggul, hanya beruntung di periode pertama.
+
+---
+
+# M5SignalLab (`M5SignalLab.mq5`)
+
+Tahap 1 rencana "$10 → $100 dengan sedikit trade di M5": mengukur apakah ada sinyal M5 yang punya edge **sebelum** dipakai dengan risiko besar.
+
+Tiga sinyal berjalan bersamaan dalam satu backtest (masing-masing maks 1 posisi), SL = 1.5 × ATR M5, TP = 3R, risiko 0.5% per trade:
+
+| Tag | Sinyal |
+|---|---|
+| LB | London breakout: candle M5 tutup di luar range Asia (00:00–07:00), dicek 07:00–11:00, maks 1×/hari |
+| PB | Pullback: tren H1 (close vs EMA50 + arah EMA) dan EMA20 > EMA50 M5; harga menyentuh EMA20 lalu candle tutup searah tren |
+| MO | Momentum: candle M5 tutup menembus high/low 48 bar (4 jam) searah tren H1 |
+
+Journal mencetak hasil per sinyal dalam satuan R (biaya termasuk). Dengan target 3R, impas butuh win rate > 25%.
+
+**Lolos bila rata-rata R > 0 dan win rate ≥ 28% di Jul–Agu dan Sep–Okt.** Uji dengan deposit 10000, real ticks, input default.
