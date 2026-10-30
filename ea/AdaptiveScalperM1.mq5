@@ -1,13 +1,15 @@
 //+------------------------------------------------------------------+
 //| AdaptiveScalperM1.mq5                                            |
 //| EA scalping M1 yang memilih strategi sesuai kondisi pasar:       |
-//|   TREND UP/DOWN -> Buy/Sell Limit saat pullback                  |
+//|   TREND UP/DOWN -> Buy/Sell Limit saat pullback (atau ladder)    |
 //|   SIDEWAYS      -> Buy Limit di batas bawah / Sell Limit di atas |
 //|   BREAKOUT      -> Buy/Sell Stop searah candle breakout          |
 //|   SQUEEZE       -> Buy Stop + Sell Stop (straddle, OCO)          |
+//| v2: konfirmasi regime, filter berita, spread-aware SL/TP,        |
+//|     jeda setelah loss beruntun, statistik per strategi.          |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.00"
+#property version   "2.00"
 #property description "Adaptive regime scalper (M1). Uji di demo/Strategy Tester dulu."
 
 #include <Trade\Trade.mqh>
@@ -30,7 +32,9 @@ input string InpComment        = "ASM1";     // Prefix komentar order
 input double InpRiskPct        = 1.0;        // Risiko per trade (% equity)
 input double InpFixedLot       = 0.0;        // Lot tetap (0 = pakai risiko %)
 input bool   InpForceMinLot    = false;      // Paksa lot minimum walau risiko > target
-input int    InpMaxPositions   = 2;          // Maks posisi terbuka bersamaan
+input double InpCommissionLot  = 0.0;        // Komisi round-turn per 1 lot (uang akun), ikut dihitung di risiko
+input int    InpMaxPositions   = 2;          // Maks posisi terbuka bersamaan (total)
+input int    InpMaxPerStrategy = 1;          // Maks posisi terbuka per strategi
 input int    InpSlippage       = 20;         // Slippage (points)
 
 input group "=== Deteksi kondisi pasar ==="
@@ -48,6 +52,7 @@ input int    InpDonchian       = 20;         // Bar Donchian (high/low breakout)
 input double InpBreakoutBarATR = 1.5;        // Range candle >= x ATR = breakout bar
 input int    InpAtrPeriod      = 14;         // ATR period
 input int    InpRsiPeriod      = 14;         // RSI period
+input int    InpConfirmBars    = 3;          // Regime baru harus bertahan N bar sebelum dipakai
 
 input group "=== Aktifkan strategi ==="
 input bool   InpUseTrend       = true;       // Trend pullback (limit)
@@ -58,6 +63,7 @@ input bool   InpUseSqueeze     = true;       // Squeeze straddle (buy stop + sel
 input group "=== Order, SL, TP (kelipatan ATR) ==="
 input double InpSLATR          = 1.0;        // Stop loss (x ATR)
 input double InpTPATR          = 1.5;        // Take profit (x ATR)
+input bool   InpPadSpread      = true;       // Tambah spread ke jarak SL & TP
 input double InpPullbackATR    = 0.5;        // Jarak limit dari harga saat trend (x ATR)
 input double InpBreakBufferATR = 0.1;        // Buffer di atas/bawah level breakout (x ATR)
 input double InpMinRangeATR    = 2.0;        // Lebar range BB minimum utk sideways (x ATR)
@@ -67,12 +73,20 @@ input group "=== Ladder stop order (mode ala video, searah tren) ==="
 input bool   InpUseLadder      = false;      // Saat trend: sebar Buy/Sell Stop bertingkat, bukan 1 limit
 input int    InpLadderLevels   = 3;          // Jumlah tingkat (maks 5)
 input double InpLadderStepATR  = 0.5;        // Jarak antar tingkat (x ATR)
-// Total risiko ladder = InpRiskPct (dibagi rata ke tiap tingkat). Set InpMaxPositions >= jumlah tingkat.
+// Total risiko ladder = InpRiskPct (dibagi rata). Set InpMaxPositions & InpMaxPerStrategy >= jumlah tingkat.
 
 input group "=== Filter timeframe lebih tinggi ==="
 input bool             InpUseHtf    = true;        // Trend/breakout hanya searah bias HTF
 input ENUM_TIMEFRAMES  InpHtf       = PERIOD_M15;  // Timeframe filter
 input int              InpHtfEma    = 50;          // EMA filter (close di atas EMA = bias naik)
+
+input group "=== Filter berita (kalender ekonomi MT5) ==="
+input bool   InpUseNews        = true;       // Aktifkan filter berita (tidak jalan di Strategy Tester)
+input string InpNewsCurrencies = "USD";      // Mata uang, pisahkan koma (mis. USD,EUR)
+input ENUM_CALENDAR_EVENT_IMPORTANCE InpNewsImportance = CALENDAR_IMPORTANCE_HIGH; // Dampak minimum
+input int    InpNewsBeforeMin  = 30;         // Berhenti N menit sebelum berita
+input int    InpNewsAfterMin   = 30;         // Lanjut N menit setelah berita
+input bool   InpNewsClosePos   = false;      // Tutup posisi terbuka menjelang berita
 
 input group "=== Manajemen posisi ==="
 input double InpBEATR          = 0.7;        // Break-even setelah profit x ATR (0 = off)
@@ -88,20 +102,31 @@ input bool   InpUseSession     = false;      // Batasi jam trading (waktu server
 input int    InpStartHour      = 8;          // Jam mulai
 input int    InpEndHour        = 22;         // Jam selesai
 input double InpDailyLossPct   = 5.0;        // Stop trading hari ini bila rugi >= % (0 = off)
+input int    InpMaxConsecLoss  = 3;          // Loss beruntun sebelum jeda (0 = off)
+input int    InpPauseMinutes   = 30;         // Lama jeda (menit)
 
 //--- globals
 CTrade      trade;
 int         hEmaF = INVALID_HANDLE, hEmaS = INVALID_HANDLE, hAdx = INVALID_HANDLE;
 int         hAtr  = INVALID_HANDLE, hBb   = INVALID_HANDLE, hRsi = INVALID_HANDLE;
+int         hHtf  = INVALID_HANDLE;
 datetime    lastBar = 0;
-ENUM_REGIME regime  = REG_NONE;
+ENUM_REGIME regime  = REG_NONE;   // regime terkonfirmasi (dipakai untuk order)
+ENUM_REGIME gRaw    = REG_NONE;   // regime mentah bar terakhir
+ENUM_REGIME candReg = REG_NONE;   // kandidat regime yang sedang dihitung
+int         candCount = 0;
 
 double gEmaF, gEmaS, gEmaFPrev, gAdx, gAtr, gRsi;
 double gBbU, gBbL, gBbM, gBwRatio, gDonH, gDonL;
 double gH1, gL1, gC1;
-int    hHtf = INVALID_HANDLE;
 int    gHtfBias = 0;      // +1 naik, -1 turun, 0 netral/tidak dipakai
 double gRiskDiv = 1.0;    // pembagi risiko (ladder)
+
+int      consecLoss = 0;
+datetime pauseUntil = 0;
+string   newsName   = "";
+
+string STRAT_TAGS[] = {"TU", "TD", "SW", "BU", "BD", "SQ"};
 
 //+------------------------------------------------------------------+
 string TagOf(const ENUM_REGIME r)
@@ -132,12 +157,40 @@ string RegimeName(const ENUM_REGIME r)
    return "TIDAK JELAS (diam)";
   }
 
+//--- arah regime: +1 naik, -1 turun, 0 netral
+int RegimeDir(const ENUM_REGIME r)
+  {
+   if(r == REG_TREND_UP || r == REG_BREAKOUT_UP)
+      return 1;
+   if(r == REG_TREND_DOWN || r == REG_BREAKOUT_DOWN)
+      return -1;
+   return 0;
+  }
+
+bool IsBreakout(const ENUM_REGIME r)
+  {
+   return r == REG_BREAKOUT_UP || r == REG_BREAKOUT_DOWN;
+  }
+
+bool IsBuyType(const long type)
+  {
+   return type == ORDER_TYPE_BUY_LIMIT || type == ORDER_TYPE_BUY_STOP || type == ORDER_TYPE_BUY;
+  }
+
 string TagFromComment(const string c)
   {
    int p = StringFind(c, "|");
    if(p < 0 || StringLen(c) < p + 3)
       return "";
    return StringSubstr(c, p + 1, 2);
+  }
+
+int TagIndex(const string tag)
+  {
+   for(int i = 0; i < ArraySize(STRAT_TAGS); i++)
+      if(STRAT_TAGS[i] == tag)
+         return i;
+   return -1;
   }
 
 //+------------------------------------------------------------------+
@@ -162,6 +215,9 @@ int OnInit()
       Print("Gagal membuat indikator");
       return INIT_FAILED;
      }
+   if(InpUseNews && MQLInfoInteger(MQL_TESTER))
+      Print("Catatan: kalender ekonomi tidak tersedia di Strategy Tester, filter berita tidak aktif saat backtest.");
+
    trade.SetExpertMagicNumber(InpMagic);
    trade.SetDeviationInPoints(InpSlippage);
    trade.SetTypeFillingBySymbol(_Symbol);
@@ -170,6 +226,7 @@ int OnInit()
 
 void OnDeinit(const int reason)
   {
+   PrintStrategyStats();
    int hs[] = {hEmaF, hEmaS, hAdx, hAtr, hBb, hRsi, hHtf};
    for(int i = 0; i < ArraySize(hs); i++)
       if(hs[i] != INVALID_HANDLE)
@@ -264,10 +321,34 @@ ENUM_REGIME DetectRegime()
    return REG_NONE;
   }
 
+//--- breakout dipakai langsung (kejadian 1 bar); regime lain harus bertahan InpConfirmBars bar
+void UpdateRegime()
+  {
+   gRaw = DetectRegime();
+   if(IsBreakout(gRaw))
+     {
+      regime = gRaw;
+      candReg = gRaw;
+      candCount = 0;
+      return;
+     }
+   if(gRaw == candReg)
+      candCount++;
+   else
+     {
+      candReg = gRaw;
+      candCount = 1;
+     }
+   if(candCount >= MathMax(1, InpConfirmBars))
+      regime = gRaw;
+   else if(IsBreakout(regime))
+      regime = REG_NONE;   // breakout tidak diperpanjang tanpa konfirmasi
+  }
+
 //+------------------------------------------------------------------+
 //| Hitung order/posisi milik EA                                     |
 //+------------------------------------------------------------------+
-int CountPositions()
+int CountPositions(const string tag = "")
   {
    int c = 0;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
@@ -275,8 +356,11 @@ int CountPositions()
       ulong tk = PositionGetTicket(i);
       if(tk == 0)
          continue;
-      if(PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == InpMagic)
-         c++;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol || PositionGetInteger(POSITION_MAGIC) != InpMagic)
+         continue;
+      if(tag != "" && TagFromComment(PositionGetString(POSITION_COMMENT)) != tag)
+         continue;
+      c++;
      }
    return c;
   }
@@ -315,10 +399,21 @@ void CancelPending(const string tag)
      }
   }
 
-//--- hapus pending yang kadaluarsa atau milik regime lama
+void CloseAllPositions()
+  {
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong tk = PositionGetTicket(i);
+      if(tk == 0 || PositionGetString(POSITION_SYMBOL) != _Symbol || PositionGetInteger(POSITION_MAGIC) != InpMagic)
+         continue;
+      trade.PositionClose(tk);
+     }
+  }
+
+//--- hapus pending yang kadaluarsa atau berlawanan arah dengan regime sekarang
 void CleanupPending()
   {
-   string cur = TagOf(regime);
+   int dir = RegimeDir(regime);
    long maxAge = (long)InpExpiryBars * PeriodSeconds(_Period);
    datetime now = TimeCurrent();
    for(int i = OrdersTotal() - 1; i >= 0; i--)
@@ -328,9 +423,10 @@ void CleanupPending()
          continue;
       if(OrderGetString(ORDER_SYMBOL) != _Symbol || OrderGetInteger(ORDER_MAGIC) != InpMagic)
          continue;
-      string tag = TagFromComment(OrderGetString(ORDER_COMMENT));
       long age = (long)(now - (datetime)OrderGetInteger(ORDER_TIME_SETUP));
-      if(tag != cur || age >= maxAge)
+      bool buy = IsBuyType(OrderGetInteger(ORDER_TYPE));
+      bool against = (dir > 0 && !buy) || (dir < 0 && buy);
+      if(age >= maxAge || against)
          trade.OrderDelete(tk);
      }
   }
@@ -355,18 +451,20 @@ double CalcLots(const double slDist)
    if(InpFixedLot > 0)
       return NormalizeLots(MathMax(InpFixedLot, vmin));
 
-   double tv = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double tv = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE_LOSS);
+   if(tv <= 0)
+      tv = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
    double ts = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    if(tv <= 0 || ts <= 0 || slDist <= 0)
       return 0;
-   double lossPerLot = slDist / ts * tv;
+   double lossPerLot = slDist / ts * tv + MathMax(InpCommissionLot, 0.0);
    double riskMoney  = AccountInfoDouble(ACCOUNT_EQUITY) * InpRiskPct / 100.0 / gRiskDiv;
    double lots = NormalizeLots(riskMoney / lossPerLot);
    if(lots < vmin)
      {
       if(!InpForceMinLot)
         {
-         PrintFormat("Lot minimum %.2f melebihi risiko %.1f%% (SL=%.2f). Order dilewati.", vmin, InpRiskPct, slDist);
+         PrintFormat("Lot minimum %.2f melebihi risiko %.2f%% (SL=%.2f). Order dilewati.", vmin, InpRiskPct / gRiskDiv, slDist);
          return 0;
         }
       lots = vmin;
@@ -386,7 +484,7 @@ bool Place(const ENUM_ORDER_TYPE type, double price, double slDist, double tpDis
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double md  = MinDist();
-   bool buy = (type == ORDER_TYPE_BUY_LIMIT || type == ORDER_TYPE_BUY_STOP);
+   bool buy = IsBuyType(type);
 
    switch(type)
      {
@@ -397,15 +495,22 @@ bool Place(const ENUM_ORDER_TYPE type, double price, double slDist, double tpDis
       default: return false;
      }
 
+   double spread = ask - bid;
+   if(InpMaxSpreadPctTP > 0 && spread > tpDist * InpMaxSpreadPctTP / 100.0)
+      return false;
+
+   // SL buy kena oleh Bid (Sell oleh Ask): beri ruang selebar spread agar tidak
+   // terkena hanya karena spread melebar; TP juga ditambah agar target bersih tetap.
+   if(InpPadSpread)
+     {
+      slDist += spread;
+      tpDist += spread;
+     }
    slDist = MathMax(slDist, md);
    tpDist = MathMax(tpDist, md);
    price  = NormalizeDouble(price, _Digits);
    double sl = NormalizeDouble(buy ? price - slDist : price + slDist, _Digits);
    double tp = NormalizeDouble(buy ? price + tpDist : price - tpDist, _Digits);
-
-   double spread = ask - bid;
-   if(InpMaxSpreadPctTP > 0 && spread > tpDist * InpMaxSpreadPctTP / 100.0)
-      return false;
 
    double lots = CalcLots(slDist);
    if(lots <= 0)
@@ -441,8 +546,8 @@ bool Place(const ENUM_ORDER_TYPE type, double price, double slDist, double tpDis
 void PlaceLadder(const bool buy, const double ref, const double sl, const double tp, const string tag)
   {
    int n = MathMax(1, MathMin(InpLadderLevels, 5));
-   int room = InpMaxPositions - CountPositions();
-   n = MathMin(n, room);
+   n = MathMin(n, InpMaxPositions - CountPositions());
+   n = MathMin(n, InpMaxPerStrategy - CountPositions(tag));
    if(n <= 0)
       return;
    gRiskDiv = n;
@@ -461,13 +566,15 @@ void PlaceForRegime()
   {
    if(CountPositions() >= InpMaxPositions)
       return;
+   string tag = TagOf(regime);
+   if(CountPositions(tag) >= InpMaxPerStrategy)
+      return;
 
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double sl  = InpSLATR * gAtr;
    double tp  = InpTPATR * gAtr;
    double buf = InpBreakBufferATR * gAtr;
-   string tag = TagOf(regime);
 
    switch(regime)
      {
@@ -515,14 +622,15 @@ void PlaceForRegime()
         }
       case REG_BREAKOUT_UP:
         {
-         if(!InpUseBreakout || CountPending(tag) > 0 || (gHtfBias < 0 && InpUseHtf))
+         // hanya pada bar breakout itu sendiri, supaya tidak mengejar harga
+         if(!InpUseBreakout || gRaw != regime || CountPending(tag) > 0 || (gHtfBias < 0 && InpUseHtf))
             return;
          Place(ORDER_TYPE_BUY_STOP, gH1 + buf, sl, tp, tag);
          break;
         }
       case REG_BREAKOUT_DOWN:
         {
-         if(!InpUseBreakout || CountPending(tag) > 0 || (gHtfBias > 0 && InpUseHtf))
+         if(!InpUseBreakout || gRaw != regime || CountPending(tag) > 0 || (gHtfBias > 0 && InpUseHtf))
             return;
          Place(ORDER_TYPE_SELL_STOP, gL1 - buf, sl, tp, tag);
          break;
@@ -589,10 +697,58 @@ bool DailyLossHit()
    return (realized + FloatingPnL()) <= -startBal * InpDailyLossPct / 100.0;
   }
 
-bool CanTrade(string &why)
+//--- true bila ada berita penting dalam jendela [-after, +before] menit dari sekarang
+bool NewsBlocked()
   {
+   newsName = "";
+   if(!InpUseNews || MQLInfoInteger(MQL_TESTER))
+      return false;
+   datetime now = TimeTradeServer();
+   string cur[];
+   int nc = StringSplit(InpNewsCurrencies, ',', cur);
+   for(int c = 0; c < nc; c++)
+     {
+      StringTrimLeft(cur[c]);
+      StringTrimRight(cur[c]);
+      if(cur[c] == "")
+         continue;
+      MqlCalendarValue v[];
+      int nv = CalendarValueHistory(v, now - InpNewsAfterMin * 60, now + InpNewsBeforeMin * 60, NULL, cur[c]);
+      for(int i = 0; i < nv; i++)
+        {
+         MqlCalendarEvent ev;
+         if(!CalendarEventById(v[i].event_id, ev))
+            continue;
+         if(ev.importance >= InpNewsImportance)
+           {
+            newsName = StringFormat("%s %s (%s)", cur[c], ev.name, TimeToString(v[i].time, TIME_MINUTES));
+            return true;
+           }
+        }
+     }
+   return false;
+  }
+
+//--- cancelAll = true bila pending order juga harus dibersihkan
+bool CanTrade(string &why, bool &cancelAll)
+  {
+   cancelAll = false;
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))
      { why = "trading tidak diizinkan"; return false; }
+   if(TimeCurrent() < pauseUntil)
+     {
+      why = "jeda setelah loss beruntun s/d " + TimeToString(pauseUntil, TIME_MINUTES);
+      cancelAll = true;
+      return false;
+     }
+   if(NewsBlocked())
+     {
+      why = "berita: " + newsName;
+      cancelAll = true;
+      if(InpNewsClosePos)
+         CloseAllPositions();
+      return false;
+     }
    if(InpUseSession)
      {
       MqlDateTime dt;
@@ -601,13 +757,13 @@ bool CanTrade(string &why)
                     ? (dt.hour >= InpStartHour && dt.hour < InpEndHour)
                     : (dt.hour >= InpStartHour || dt.hour < InpEndHour);
       if(!inside)
-        { why = "di luar jam trading"; return false; }
+        { why = "di luar jam trading"; cancelAll = true; return false; }
      }
    double spreadPts = (SymbolInfoDouble(_Symbol, SYMBOL_ASK) - SymbolInfoDouble(_Symbol, SYMBOL_BID)) / _Point;
    if(spreadPts > InpMaxSpreadPts)
      { why = StringFormat("spread %.0f > %d", spreadPts, InpMaxSpreadPts); return false; }
    if(DailyLossHit())
-     { why = "batas rugi harian tercapai"; return false; }
+     { why = "batas rugi harian tercapai"; cancelAll = true; return false; }
    why = "OK";
    return true;
   }
@@ -644,8 +800,7 @@ void ManagePositions()
       bool   set  = false;
       if(InpBEATR > 0 && prof >= InpBEATR * gAtr)
         {
-         double be = buy ? open + InpBELockPts * _Point : open - InpBELockPts * _Point;
-         cand = be;
+         cand = buy ? open + InpBELockPts * _Point : open - InpBELockPts * _Point;
          set = true;
         }
       if(InpTrailStartATR > 0 && InpTrailATR > 0 && prof >= InpTrailStartATR * gAtr)
@@ -667,12 +822,160 @@ void ManagePositions()
   }
 
 //+------------------------------------------------------------------+
+//| Event transaksi: OCO squeeze & hitung loss beruntun              |
+//+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+  {
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD || !HistoryDealSelect(trans.deal))
+      return;
+   if(HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != InpMagic ||
+      HistoryDealGetString(trans.deal, DEAL_SYMBOL) != _Symbol)
+      return;
+
+   long entry = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+   if(entry == DEAL_ENTRY_IN)
+     {
+      // salah satu sisi straddle terisi -> hapus sisi lainnya
+      string c = "";
+      ulong ord = (ulong)HistoryDealGetInteger(trans.deal, DEAL_ORDER);
+      if(ord > 0 && HistoryOrderSelect(ord))
+         c = HistoryOrderGetString(ord, ORDER_COMMENT);
+      if(c == "")
+         c = HistoryDealGetString(trans.deal, DEAL_COMMENT);
+      if(TagFromComment(c) == "SQ")
+         CancelPending("SQ");
+      return;
+     }
+
+   if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_OUT_BY || entry == DEAL_ENTRY_INOUT)
+     {
+      double net = HistoryDealGetDouble(trans.deal, DEAL_PROFIT) + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION) +
+                   HistoryDealGetDouble(trans.deal, DEAL_SWAP) + HistoryDealGetDouble(trans.deal, DEAL_FEE);
+      if(net < 0)
+         consecLoss++;
+      else
+         consecLoss = 0;
+      if(InpMaxConsecLoss > 0 && consecLoss >= InpMaxConsecLoss)
+        {
+         pauseUntil = TimeCurrent() + InpPauseMinutes * 60;
+         consecLoss = 0;
+         CancelPending("");
+         PrintFormat("%d loss beruntun, jeda sampai %s", InpMaxConsecLoss, TimeToString(pauseUntil, TIME_DATE | TIME_MINUTES));
+        }
+     }
+  }
+
+//+------------------------------------------------------------------+
+//| Statistik per strategi (dicetak saat EA dilepas / backtest usai) |
+//+------------------------------------------------------------------+
+void PrintStrategyStats()
+  {
+   if(!HistorySelect(0, TimeCurrent() + 86400))
+      return;
+   int nTags = ArraySize(STRAT_TAGS);
+   long   pid[];
+   int    ptag[];
+   double pnet[];
+   bool   pclosed[];
+   int    np = 0;
+
+   int total = HistoryDealsTotal();
+   for(int i = 0; i < total; i++)
+     {
+      ulong tk = HistoryDealGetTicket(i);
+      if(tk == 0 || HistoryDealGetInteger(tk, DEAL_MAGIC) != InpMagic ||
+         HistoryDealGetString(tk, DEAL_SYMBOL) != _Symbol)
+         continue;
+      long t = HistoryDealGetInteger(tk, DEAL_TYPE);
+      if(t != DEAL_TYPE_BUY && t != DEAL_TYPE_SELL)
+         continue;
+
+      long pos = HistoryDealGetInteger(tk, DEAL_POSITION_ID);
+      int idx = -1;
+      for(int j = np - 1; j >= 0; j--)
+         if(pid[j] == pos)
+           {
+            idx = j;
+            break;
+           }
+      if(idx < 0)
+        {
+         idx = np++;
+         ArrayResize(pid, np);
+         ArrayResize(ptag, np);
+         ArrayResize(pnet, np);
+         ArrayResize(pclosed, np);
+         pid[idx] = pos;
+         ptag[idx] = -1;
+         pnet[idx] = 0;
+         pclosed[idx] = false;
+        }
+
+      pnet[idx] += HistoryDealGetDouble(tk, DEAL_PROFIT) + HistoryDealGetDouble(tk, DEAL_COMMISSION) +
+                   HistoryDealGetDouble(tk, DEAL_SWAP) + HistoryDealGetDouble(tk, DEAL_FEE);
+      long entry = HistoryDealGetInteger(tk, DEAL_ENTRY);
+      if(entry == DEAL_ENTRY_IN)
+        {
+         ulong ord = (ulong)HistoryDealGetInteger(tk, DEAL_ORDER);
+         string c = (ord > 0) ? HistoryOrderGetString(ord, ORDER_COMMENT) : "";
+         if(c == "")
+            c = HistoryDealGetString(tk, DEAL_COMMENT);
+         ptag[idx] = TagIndex(TagFromComment(c));
+        }
+      else
+         pclosed[idx] = true;
+     }
+
+   int    cnt[], wins[];
+   double gp[], gl[];
+   ArrayResize(cnt, nTags);
+   ArrayResize(wins, nTags);
+   ArrayResize(gp, nTags);
+   ArrayResize(gl, nTags);
+   ArrayInitialize(cnt, 0);
+   ArrayInitialize(wins, 0);
+   ArrayInitialize(gp, 0.0);
+   ArrayInitialize(gl, 0.0);
+
+   for(int j = 0; j < np; j++)
+     {
+      int k = ptag[j];
+      if(k < 0 || !pclosed[j])
+         continue;
+      cnt[k]++;
+      if(pnet[j] > 0)
+        {
+         wins[k]++;
+         gp[k] += pnet[j];
+        }
+      else
+         gl[k] += -pnet[j];
+     }
+
+   Print("===== Statistik per strategi (", _Symbol, ", magic ", InpMagic, ") =====");
+   Print("Tag  Trades  Win%    Net        PF");
+   for(int k = 0; k < nTags; k++)
+     {
+      double wr = cnt[k] > 0 ? 100.0 * wins[k] / cnt[k] : 0;
+      string pf = gl[k] > 0 ? DoubleToString(gp[k] / gl[k], 2) : (gp[k] > 0 ? "inf" : "-");
+      PrintFormat("%-4s %6d  %5.1f  %9.2f  %6s", STRAT_TAGS[k], cnt[k], wr, gp[k] - gl[k], pf);
+     }
+   Print("TU/TD=trend pullback, SW=sideways, BU/BD=breakout, SQ=squeeze straddle");
+  }
+
+//+------------------------------------------------------------------+
 void Dashboard(const string why)
   {
-   string s = "Adaptive Scalper M1\n";
-   s += "Kondisi : " + RegimeName(regime) + "\n";
-   s += StringFormat("ADX %.1f | RSI %.1f | ATR %.2f | BB-ratio %.2f\n", gAdx, gRsi, gAtr, gBwRatio);
-   s += StringFormat("Posisi %d | Pending %d\n", CountPositions(), CountPending(""));
+   string s = "Adaptive Scalper M1 v2\n";
+   s += "Kondisi : " + RegimeName(regime);
+   if(gRaw != regime)
+      s += StringFormat("  (kandidat: %s %d/%d)", RegimeName(candReg), candCount, InpConfirmBars);
+   s += "\n";
+   s += StringFormat("ADX %.1f | RSI %.1f | ATR %.2f | BB-ratio %.2f | HTF %s\n", gAdx, gRsi, gAtr, gBwRatio,
+                     !InpUseHtf ? "off" : (gHtfBias > 0 ? "naik" : "turun"));
+   s += StringFormat("Posisi %d | Pending %d | Loss beruntun %d\n", CountPositions(), CountPending(""), consecLoss);
    s += "Status  : " + why;
    Comment(s);
   }
@@ -682,8 +985,8 @@ void OnTick()
   {
    ManagePositions();
 
-   // OCO untuk straddle: begitu ada posisi, hapus sisa order squeeze
-   if(CountPositions() > 0)
+   // cadangan OCO bila komentar order tidak terbaca saat transaksi
+   if(CountPositions("SQ") > 0 && CountPending("SQ") > 0)
       CancelPending("SQ");
 
    datetime t = iTime(_Symbol, _Period, 0);
@@ -693,15 +996,16 @@ void OnTick()
       return;
    lastBar = t;
 
-   regime = DetectRegime();
+   UpdateRegime();
    CleanupPending();
 
    string why;
-   bool ok = CanTrade(why);
+   bool cancelAll;
+   bool ok = CanTrade(why, cancelAll);
    Dashboard(why);
    if(!ok)
      {
-      if(StringFind(why, "rugi harian") >= 0)
+      if(cancelAll)
          CancelPending("");
       return;
      }
