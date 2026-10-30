@@ -39,3 +39,17 @@ python3 newsfilter.py XAUUSD_M5_20240101_20261030.csv calendar_USD.csv
 - Mengikuti arah bar pertama: negatif. Melawannya: tidak konsisten (−0.34 train, +0.91 test USD/oz).
 - Menghindari jendela berita (−30/+60 menit) tidak memperbaiki sinyal mana pun.
 - Pullback EMA **hanya** di jendela berita: +0.063R train / +0.238R test (~500 trade). Belum signifikan secara statistik, dan biaya saat berita kemungkinan diremehkan (spread & slippage melebar). Hipotesis untuk diuji maju, bukan bukti.
+
+## Putaran 3: SMC/ICT, level, indikator lain, pola chart, aturan keluar (`round3.py`)
+```bash
+python3 round3.py XAUUSD_M5_20240101_20261030.csv   # 17 sinyal x 6 aturan keluar -> results_round3.csv
+```
+Aturan ditetapkan sebelum melihat hasil: penemuan Jan 2024 – Jul 2026; Agu–Okt 2026 dikunci dan hanya dibuka untuk varian yang lolos (t ≥ 3 dan rata-rata R > 0 di 2024, 2025, 2026).
+
+Sinyal: sweep likuiditas range Asia & high/low kemarin, retrace FVG, BOS, CHoCH, pantulan pivot S1/R1, pantulan angka bulat $50, breakout high/low kemarin, Fibonacci 50–61.8%, MACD cross, MACD divergence, Supertrend flip, pantulan VWAP, ADX + breakout, Stochastic, double bottom/top, acak.
+Aturan keluar: ATR 2R, ATR 3R, SL swing 2R, break-even lalu 3R, trailing 2 ATR, partial 50% di 1R + sisanya 3R.
+
+- 102 varian, **0 lolos**. Statistik-t terbaik 0.59 (breakout high/low kemarin, ATR 2R).
+- Entry acak (BE→3R) masuk 3 besar; sebagian besar sinyal lebih buruk dari acak.
+- Tidak ada aturan keluar yang membuat rata-rata positif; trailing paling tidak buruk (−0.034R).
+- Periode terkunci tidak dibuka karena tidak ada varian yang lolos.
