@@ -17,7 +17,7 @@
 //| HANYA UNTUK AKUN DEMO.                                           |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.00"
+#property version   "1.01"
 #property description "Uji maju otomatis (demo): pullback saat berita + awal selaras penuh multi-timeframe."
 
 #include <Trade\Trade.mqh>
@@ -113,6 +113,8 @@ void LoadNews()
    ArrayResize(newsName, 0);
    datetime from = TimeCurrent() - 2 * 86400;
    int h = FileOpen(InpCalendarCsv, FILE_READ | FILE_CSV | FILE_ANSI, ',');
+   if(h == INVALID_HANDLE)   // Strategy Tester hanya bisa membaca folder Common\Files
+      h = FileOpen(InpCalendarCsv, FILE_READ | FILE_CSV | FILE_ANSI | FILE_COMMON, ',');
    if(h != INVALID_HANDLE)
      {
       for(int k = 0; k < 7 && !FileIsEnding(h); k++)
@@ -128,6 +130,13 @@ void LoadNews()
             AddNews(t, ev);
         }
       FileClose(h);
+     }
+   if(MQLInfoInteger(MQL_TESTER))
+     {
+      lastCalRefresh = TimeCurrent();
+      if(ArraySize(newsT) == 0)
+         Print("PERINGATAN: jadwal berita kosong di tester. Salin calendar_USD.csv ke folder Common\\Files.");
+      return;                 // kalender MT5 tidak tersedia di Strategy Tester
      }
    MqlCalendarValue v[];
    int n = CalendarValueHistory(v, from, TimeTradeServer() + 14 * 86400, "US", NULL);
