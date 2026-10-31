@@ -95,3 +95,17 @@ Aturan sama dengan putaran 3 (Agu–Okt 2026 tetap terkunci). Jam New York memak
 | Turtle Soup M5 | 2.171–2.922 | −0.09…−0.11 | −3.9…−4.8 | | | |
 
 0 dari 17 lolos. Momentum harian dan Silver Bullet NY PM positif tiap tahun tetapi jauh dari t ≥ 3. Turtle Soup (fade false breakout) negatif signifikan: di gold M5 breakout lebih sering berlanjut daripada gagal.
+
+## Insight riset EMA (`ema_research.py`)
+Fase selaras penuh (H4, H1, M15, M5 searah), gerak 1 jam ke depan searah tren besar, sampel per jam:
+
+| EMA | n | USD/jam | t | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|---|
+| 9/21 | 4474 | +0.44 | 2.51 | +0.14 | +0.15 | +1.18 |
+| 10/30 | 4842 | +0.49 | 3.05 | +0.12 | +0.30 | +1.19 |
+| **20/50** | 4797 | **+0.55** | **3.60** | +0.20 | +0.45 | +1.09 |
+| 20/100 | 5659 | +0.48 | 3.54 | +0.06 | +0.50 | +0.95 |
+| 50/100 | 4804 | +0.58 | 3.89 | +0.04 | +0.64 | +1.16 |
+| 50/200 | 5624 | +0.50 | 3.76 | +0.05 | +0.57 | +0.95 |
+
+Efeknya bertahan di semua pasangan EMA (tidak bergantung pada pilihan 20/50). Per rezim volatilitas (ATR H1 vs median 30 hari): rendah +$0.73 (t 2.39), normal +$0.33 (t 1.71, 2025 −0.02), tinggi +$0.86 (t 2.40). Tidak cukup jelas untuk dijadikan filter.
