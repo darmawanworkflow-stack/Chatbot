@@ -167,3 +167,14 @@ Panah sinyal M5 untuk satu-satunya hipotesis yang tersisa dari riset (`ea/resear
 - Jadwal berita: salin `calendar_USD.csv` (hasil `ExportCalendar.mq5`) ke `MQL5/Files`, ditambah kalender MT5 langsung untuk berita terbaru dan mendatang.
 
 **Hipotesis, belum terbukti.** Catat setiap sinyal di demo 2–3 bulan sebelum memakai uang sungguhan.
+
+---
+
+# TechnicalMap (`TechnicalMap.mq5`, indikator)
+
+Alat bantu baca chart M5 untuk hari biasa. **Bukan sinyal terbukti**: riset 2024–2026 tidak menemukan keunggulan teknikal M5 setelah biaya.
+
+- **Support & Resistance**: swing H1 (10 hari) & H4 (30 hari), high/low kemarin, pivot harian (P, R1, S1), high/low sesi Asia, angka bulat $50. Level yang berjarak ≤ 0.35 ATR H1 digabung; bintang = kekuatan (jumlah bobot sumber).
+- **Panel**: tren M5/M15/H1/H4 (close vs EMA50 & EMA20 vs EMA50) + RSI, kesimpulan arah (skor dari tren M15/H1/H4, pola candle terakhir, posisi di support/resistance, RSI M5), 3 support & 3 resistance terdekat.
+- **Pola candle M5**: Engulf, Hammer, ShootStar, MorningStar, EveningStar, Inside, Doji.
+- **Panah konfluensi**: pola bullish di support (kekuatan ≥ 2) dan tren H1 tidak turun → biru; kebalikannya → oranye. Panah historis hanya memakai level yang sudah ada pada waktu candle itu.
