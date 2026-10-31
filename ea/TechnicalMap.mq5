@@ -19,11 +19,11 @@
 //| menemukan keunggulan teknikal M5 setelah biaya.                  |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.10"
+#property version   "1.20"
 #property description "Peta teknikal M5: support/resistance, tren multi-TF, pola candle, panah konfluensi."
 #property indicator_chart_window
-#property indicator_buffers 2
-#property indicator_plots   2
+#property indicator_buffers 4
+#property indicator_plots   4
 #property indicator_label1  "Konfluensi BUY"
 #property indicator_type1   DRAW_ARROW
 #property indicator_color1  clrDeepSkyBlue
@@ -32,6 +32,14 @@
 #property indicator_type2   DRAW_ARROW
 #property indicator_color2  clrOrange
 #property indicator_width2  3
+#property indicator_label3  "Awal selaras NAIK"
+#property indicator_type3   DRAW_ARROW
+#property indicator_color3  clrGold
+#property indicator_width3  2
+#property indicator_label4  "Awal selaras TURUN"
+#property indicator_type4   DRAW_ARROW
+#property indicator_color4  clrGold
+#property indicator_width4  2
 
 input int    InpSwingBarsH1  = 240;          // Swing H1: lihat N bar ke belakang (240 = 10 hari)
 input int    InpSwingBarsH4  = 180;          // Swing H4: lihat N bar ke belakang (180 = 30 hari)
@@ -40,12 +48,12 @@ input double InpTouchATR     = 0.30;         // Candle dianggap "di level" bila 
 input int    InpMaxLevels    = 5;            // Maks level ditampilkan per sisi (support / resistance)
 input int    InpPatternBars  = 150;          // Label pola & panah untuk N candle terakhir
 input bool   InpLabelPatterns= true;         // Tampilkan nama pola candle
-input bool   InpAlert        = false;        // Alert saat panah konfluensi baru
-input bool   InpPush         = false;        // Notifikasi HP saat panah konfluensi baru
+input bool   InpAlert        = false;        // Alert saat panah konfluensi / awal selaras baru
+input bool   InpPush         = false;        // Notifikasi HP saat panah konfluensi / awal selaras baru
 input color  InpSupColor     = clrMediumSeaGreen; // Warna support
 input color  InpResColor     = clrIndianRed;      // Warna resistance
 
-double BuyArr[], SellArr[];
+double BuyArr[], SellArr[], AlignUp[], AlignDn[];
 const string PFX = "TMAP_";
 int hEma20[4], hEma50[4], hRsi[4], hAtrH1;
 ENUM_TIMEFRAMES TFS[4] = {PERIOD_M5, PERIOD_M15, PERIOD_H1, PERIOD_H4};
@@ -63,6 +71,12 @@ int OnInit()
   {
    SetIndexBuffer(0, BuyArr, INDICATOR_DATA);
    SetIndexBuffer(1, SellArr, INDICATOR_DATA);
+   SetIndexBuffer(2, AlignUp, INDICATOR_DATA);
+   SetIndexBuffer(3, AlignDn, INDICATOR_DATA);
+   PlotIndexSetInteger(2, PLOT_ARROW, 241);
+   PlotIndexSetInteger(3, PLOT_ARROW, 242);
+   PlotIndexSetDouble(2, PLOT_EMPTY_VALUE, EMPTY_VALUE);
+   PlotIndexSetDouble(3, PLOT_EMPTY_VALUE, EMPTY_VALUE);
    PlotIndexSetInteger(0, PLOT_ARROW, 233);
    PlotIndexSetInteger(1, PLOT_ARROW, 234);
    PlotIndexSetDouble(0, PLOT_EMPTY_VALUE, EMPTY_VALUE);
@@ -383,21 +397,36 @@ int Trend(const int k)
    return 0;
   }
 
-//--- tren H1 pada waktu t (bar H1 tutup sebelum t), untuk panah historis
-int TrendH1At(const datetime t)
+//--- tren TF ke-k pada waktu t (bar TF terakhir yang sudah tutup pada t), untuk tanda historis
+int TrendAt(const int k, const datetime t)
   {
-   int sh = iBarShift(_Symbol, PERIOD_H1, t - 1);
+   ENUM_TIMEFRAMES tf = TFS[k];
+   int sh = iBarShift(_Symbol, tf, t - 1);
    if(sh < 0)
       return 0;
-   if(iTime(_Symbol, PERIOD_H1, sh) + 3600 > t)
+   if(iTime(_Symbol, tf, sh) + PeriodSeconds(tf) > t)
       sh += 1;                              // bar itu belum tutup pada waktu t -> pakai bar sebelumnya
-   double e20 = Buf(hEma20[2], sh), e50 = Buf(hEma50[2], sh);
-   double c = iClose(_Symbol, PERIOD_H1, sh);
+   double e20 = Buf(hEma20[k], sh), e50 = Buf(hEma50[k], sh);
+   double c = iClose(_Symbol, tf, sh);
+   if(e20 <= 0 || e50 <= 0)
+      return 0;
    if(c > e50 && e20 > e50)
       return 1;
    if(c < e50 && e20 < e50)
       return -1;
    return 0;
+  }
+
+//--- +1/-1 bila H4, H1, M15, M5 searah pada waktu t, selain itu 0
+int AlignedAt(const datetime t)
+  {
+   int d = TrendAt(3, t);
+   if(d == 0)
+      return 0;
+   for(int k = 0; k < 3; k++)
+      if(TrendAt(k, t) != d)
+         return 0;
+   return d;
   }
 
 //+------------------------------------------------------------------+
@@ -431,22 +460,22 @@ string SyncText(const int &tr[], const int lastPat, const double price)
       if(m15 == big && m5 == big)
         {
          phase = "SELARAS PENUH: H4, H1, M15, M5 semua " + dir;
-         step = "tren sedang berjalan; entry baru rawan terlambat, tunggu koreksi kecil";
+         step = "fase historis TERBAIK (2024-26: +$0.55/jam searah tren, positif tiap tahun). Masuk saat baru selaras & keluar saat M15 berbalik: +0.15R/trade, belum terbukti kuat";
         }
       else if(m15 == -big)
         {
          phase = "PULLBACK: tren besar " + dir + ", M15 sedang koreksi berlawanan";
-         step = "tunggu M15 kembali datar/searah, lalu pola M5 " + (big > 0 ? "bullish di support" : "bearish di resistance");
+         step = "historis sedikit negatif (-$0.19/jam searah tren); tunggu sampai selaras penuh";
         }
       else if(m15 == 0)
         {
          phase = "PULLBACK MELEMAH: tren besar " + dir + ", M15 transisi";
-         step = "cari pemicu M5 searah " + dir + (lastPat == big ? " - pola candle terakhir sudah searah" : "");
+         step = "historis TERBURUK (-$0.63/jam searah tren); hindari entry searah tren di fase ini";
         }
       else
         {
          phase = "M15 sudah searah " + dir + ", M5 masih koreksi";
-         step = "pemicu M5 searah tren menjadi konfirmasi terakhir";
+         step = "historis netral (~$0/jam); tanda emas muncul bila M5 ikut searah";
         }
      }
    else if(h4 != 0 && h1 == -h4)
@@ -500,16 +529,30 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
    int last = rates_total - 2;
    int from = MathMax(3, last - InpPatternBars + 1);
    for(int i = MathMax(0, prev_calculated - 1); i < rates_total; i++)
-      BuyArr[i] = SellArr[i] = EMPTY_VALUE;
+      BuyArr[i] = SellArr[i] = AlignUp[i] = AlignDn[i] = EMPTY_VALUE;
    for(int i = 0; i < from; i++)
-      BuyArr[i] = SellArr[i] = EMPTY_VALUE;
+      BuyArr[i] = SellArr[i] = AlignUp[i] = AlignDn[i] = EMPTY_VALUE;
+   int prevAlign = AlignedAt(time[from - 1] + PeriodSeconds());
+   int lastAlignStart = 0;
 
    double tol = InpTouchATR * atrH1;
    int lastPat = 0, lastArrow = 0;
    string lastPatName = "", lastArrowSrc = "";
    for(int i = from; i <= last; i++)
      {
-      BuyArr[i] = SellArr[i] = EMPTY_VALUE;
+      BuyArr[i] = SellArr[i] = AlignUp[i] = AlignDn[i] = EMPTY_VALUE;
+      // awal fase selaras penuh (H4, H1, M15, M5 searah)
+      int al = AlignedAt(time[i] + PeriodSeconds());
+      if(al != 0 && al != prevAlign)
+        {
+         if(al > 0)
+            AlignUp[i] = low[i] - 0.8 * atrH1;
+         else
+            AlignDn[i] = high[i] + 0.8 * atrH1;
+         if(i == last)
+            lastAlignStart = al;
+        }
+      prevAlign = al;
       string nm;
       int d = Pattern(i, open, high, low, close, nm);
       if(nm == "")
@@ -535,7 +578,7 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
       // konfluensi: pola di level (yang sudah ada pada waktu itu) & tren H1 tidak berlawanan
       string src;
       int str = LevelStrengthAt(d > 0 ? low[i] : high[i], tclose, tol, src);
-      if(str < 2 || TrendH1At(tclose) == -d)
+      if(str < 2 || TrendAt(2, tclose) == -d)
          continue;
       if(d > 0)
          BuyArr[i] = low[i] - 0.4 * atrH1;
@@ -607,13 +650,16 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
    txt += StringFormat("Candle terakhir: %s\n", lastPatName == "" ? "tanpa pola" : lastPatName);
    txt += "Resistance terdekat:\n" + (resTxt == "" ? "  -\n" : resTxt);
    txt += "Support terdekat:\n" + (supTxt == "" ? "  -\n" : supTxt);
-   txt += "Riset 2024-2026: pola & level M5 tidak memberi keunggulan setelah biaya.";
+   txt += "Backtest 2024-26: panah konfluensi -0.07R/trade (setara acak), kesimpulan skor tepat arah ~51%.\n";
+   txt += "Satu-satunya yang konsisten: fase SELARAS PENUH (tanda emas = awal fase). Tetap uji di demo.";
    Comment(txt);
 
-   if(lastArrow != 0 && time[last] != lastAlert && prev_calculated > 0)
+   if((lastArrow != 0 || lastAlignStart != 0) && time[last] != lastAlert && prev_calculated > 0)
      {
       lastAlert = time[last];
-      string msg = StringFormat("%s M5 konfluensi %s: %s (kesimpulan %s)", _Symbol, lastArrow > 0 ? "BUY" : "SELL", lastArrowSrc, bias);
+      string msg = lastAlignStart != 0
+                   ? StringFormat("%s M5 AWAL SELARAS PENUH %s (H4,H1,M15,M5 searah)", _Symbol, lastAlignStart > 0 ? "NAIK" : "TURUN")
+                   : StringFormat("%s M5 konfluensi %s: %s (kesimpulan %s)", _Symbol, lastArrow > 0 ? "BUY" : "SELL", lastArrowSrc, bias);
       if(InpAlert)
          Alert(msg);
       if(InpPush)

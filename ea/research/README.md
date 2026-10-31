@@ -53,3 +53,23 @@ Aturan keluar: ATR 2R, ATR 3R, SL swing 2R, break-even lalu 3R, trailing 2 ATR, 
 - Entry acak (BE→3R) masuk 3 besar; sebagian besar sinyal lebih buruk dari acak.
 - Tidak ada aturan keluar yang membuat rata-rata positif; trailing paling tidak buruk (−0.034R).
 - Periode terkunci tidak dibuka karena tidak ada varian yang lolos.
+
+## Backtest kasar TechnicalMap (`tmap_bt.py`, `tmap_phase.py`, `tmap_align.py`)
+```bash
+python3 tmap_bt.py    XAUUSD_M5_20240101_20261030.csv   # panah konfluensi, skor kesimpulan, fase
+python3 tmap_phase.py XAUUSD_M5_20240101_20261030.csv   # fase per tahun (sampel per jam, tanpa tumpang tindih)
+python3 tmap_align.py XAUUSD_M5_20240101_20261030.csv   # aturan sederhana dari fase selaras penuh
+```
+- Panah konfluensi (pola di level kekuatan ≥ 2, tren H1 tidak berlawanan): −0.068R (2R) vs acak −0.057R.
+- Skor kesimpulan "condong naik/turun": tepat arah 50.7% (5 mnt), 50.4% (1 jam); gerak searah $0.18/jam < biaya.
+- Fase sinkronisasi, gerak 1 jam searah tren besar (H4 = H1):
+
+| Fase | 2024 | 2025 | 2026 | Gabungan (t) |
+|---|---|---|---|---|
+| Selaras penuh (H4, H1, M15, M5 searah) | +$0.20 | +$0.45 | +$1.09 | +$0.55 (3.60) |
+| M15 searah, M5 koreksi | −$0.40 | +$0.65 | −$0.34 | $0.00 (0.00) |
+| Pullback M15 | −$0.16 | −$0.74 | +$0.44 | −$0.19 (−0.74) |
+| Pullback melemah (M15 datar) | +$0.07 | −$0.03 | −$2.15 | −$0.63 (−2.23) |
+
+- Aturan "masuk saat baru selaras penuh, keluar saat M15 berbalik, SL 2 ATR": +0.154R/trade, t 2.33 (2024 −0.005R, 2025 +0.386R, 2026 +0.065R). Jam 07–18 saja: +0.193R, t 2.32. Menahan tetap 1 jam: ≈ 0R.
+- Catatan: temuan fase ini muncul setelah banyak pengujian; konsisten dengan literatur time-series momentum, tetapi sebagian besar hasil aturan berasal dari 2025. Perlu uji maju.
