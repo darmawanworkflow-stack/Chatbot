@@ -10,13 +10,16 @@
 //|  - Panah konfluensi: pola bullish di support & tren H1 tidak     |
 //|    turun (atau kebalikannya di resistance).                      |
 //|  - Kesimpulan arah dengan skor dan alasan.                       |
+//|  - Sinkronisasi antar timeframe: fase (lanjutan, pullback M15,   |
+//|    pullback selesai, konflik), candle H1/H4 yang sedang berjalan |
+//|    dan posisi harga di range harian (premium/discount).          |
 //| Panah historis hanya memakai level yang sudah ada pada waktu     |
 //| candle itu (tanpa melihat masa depan).                           |
 //| ALAT BANTU BACA, BUKAN SINYAL TERBUKTI: riset 2024-2026 tidak    |
 //| menemukan keunggulan teknikal M5 setelah biaya.                  |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.00"
+#property version   "1.10"
 #property description "Peta teknikal M5: support/resistance, tren multi-TF, pola candle, panah konfluensi."
 #property indicator_chart_window
 #property indicator_buffers 2
@@ -398,6 +401,81 @@ int TrendH1At(const datetime t)
   }
 
 //+------------------------------------------------------------------+
+//| Sinkronisasi antar timeframe                                     |
+//+------------------------------------------------------------------+
+string Arrow(const int d)
+  {
+   return d > 0 ? "NAIK" : (d < 0 ? "TURUN" : "datar");
+  }
+
+//--- info candle TF besar yang sedang berjalan
+string LiveCandle(const ENUM_TIMEFRAMES tf, const string name)
+  {
+   double o = iOpen(_Symbol, tf, 0), hh = iHigh(_Symbol, tf, 0), ll = iLow(_Symbol, tf, 0), c = iClose(_Symbol, tf, 0);
+   datetime t0 = iTime(_Symbol, tf, 0);
+   int sec = PeriodSeconds(tf);
+   double done = sec > 0 ? 100.0 * (double)(TimeCurrent() - t0) / sec : 0;
+   double pos = hh > ll ? 100.0 * (c - ll) / (hh - ll) : 50;
+   return StringFormat("%s %s %+.2f (%.0f%% waktu berjalan, harga di %.0f%% range candle)", name,
+                       c >= o ? "hijau" : "merah", c - o, MathMin(done, 100), pos);
+  }
+
+string SyncText(const int &tr[], const int lastPat, const double price)
+  {
+   int m5 = tr[0], m15 = tr[1], h1 = tr[2], h4 = tr[3];
+   int big = (h4 != 0 && h4 == h1) ? h4 : 0;
+   string phase, step;
+   if(big != 0)
+     {
+      string dir = Arrow(big);
+      if(m15 == big && m5 == big)
+        {
+         phase = "SELARAS PENUH: H4, H1, M15, M5 semua " + dir;
+         step = "tren sedang berjalan; entry baru rawan terlambat, tunggu koreksi kecil";
+        }
+      else if(m15 == -big)
+        {
+         phase = "PULLBACK: tren besar " + dir + ", M15 sedang koreksi berlawanan";
+         step = "tunggu M15 kembali datar/searah, lalu pola M5 " + (big > 0 ? "bullish di support" : "bearish di resistance");
+        }
+      else if(m15 == 0)
+        {
+         phase = "PULLBACK MELEMAH: tren besar " + dir + ", M15 transisi";
+         step = "cari pemicu M5 searah " + dir + (lastPat == big ? " - pola candle terakhir sudah searah" : "");
+        }
+      else
+        {
+         phase = "M15 sudah searah " + dir + ", M5 masih koreksi";
+         step = "pemicu M5 searah tren menjadi konfirmasi terakhir";
+        }
+     }
+   else if(h4 != 0 && h1 == -h4)
+     {
+      phase = "KONFLIK: H4 " + Arrow(h4) + " vs H1 " + Arrow(h1);
+      step = "pasar transisi; sebaiknya tunggu H1 dan H4 searah";
+     }
+   else
+     {
+      phase = "Tren besar belum jelas (H4 " + Arrow(h4) + ", H1 " + Arrow(h1) + ")";
+      step = "tanpa arah besar, pola M5 cenderung acak; utamakan level kuat";
+     }
+   int ref = h4 != 0 ? h4 : h1;
+   int agree = 0;
+   for(int k = 0; k < 4; k++)
+      if(ref != 0 && tr[k] == ref)
+         agree++;
+   double dh = iHigh(_Symbol, PERIOD_D1, 0), dl = iLow(_Symbol, PERIOD_D1, 0);
+   double dpos = dh > dl ? 100.0 * (price - dl) / (dh - dl) : 50;
+   string s = "Sinkronisasi TF: " + phase + StringFormat("  (%d/4 TF searah)\n", agree);
+   s += "  Langkah: " + step + "\n";
+   s += "  " + LiveCandle(PERIOD_H4, "Candle H4") + "\n";
+   s += "  " + LiveCandle(PERIOD_H1, "Candle H1") + "\n";
+   s += StringFormat("  Posisi di range hari ini: %.0f%% (%s)\n", dpos,
+                     dpos >= 70 ? "premium/atas - mahal untuk buy" : (dpos <= 30 ? "discount/bawah - murah untuk buy" : "tengah"));
+   return s;
+  }
+
+//+------------------------------------------------------------------+
 int OnCalculate(const int rates_total, const int prev_calculated, const datetime &time[],
                 const double &open[], const double &high[], const double &low[], const double &close[],
                 const long &tick_volume[], const long &volume[], const int &spread[])
@@ -480,9 +558,11 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
    int score = 0;
    string why = "";
    string trendTxt = "";
+   int trs[4];
    for(int k = 0; k < 4; k++)
      {
       int tr = Trend(k);
+      trs[k] = tr;
       double rsi = Buf(hRsi[k], 1);
       trendTxt += StringFormat("%s %s RSI %.0f   ", TFN[k], tr > 0 ? "NAIK" : (tr < 0 ? "TURUN" : "datar"), rsi);
       if(k >= 1)                            // M15, H1, H4 ikut skor
@@ -523,6 +603,7 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
    string txt = "TechnicalMap M5 - alat bantu baca chart (bukan sinyal terbukti)\n";
    txt += trendTxt + "\n";
    txt += StringFormat("Kesimpulan: %s (skor %+d)  alasan: %s\n", bias, score, why == "" ? "-" : why);
+   txt += SyncText(trs, lastPat, price);
    txt += StringFormat("Candle terakhir: %s\n", lastPatName == "" ? "tanpa pola" : lastPatName);
    txt += "Resistance terdekat:\n" + (resTxt == "" ? "  -\n" : resTxt);
    txt += "Support terdekat:\n" + (supTxt == "" ? "  -\n" : supTxt);
