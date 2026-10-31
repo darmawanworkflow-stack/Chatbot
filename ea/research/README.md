@@ -73,3 +73,25 @@ python3 tmap_align.py XAUUSD_M5_20240101_20261030.csv   # aturan sederhana dari 
 
 - Aturan "masuk saat baru selaras penuh, keluar saat M15 berbalik, SL 2 ATR": +0.154R/trade, t 2.33 (2024 −0.005R, 2025 +0.386R, 2026 +0.065R). Jam 07–18 saja: +0.193R, t 2.32. Menahan tetap 1 jam: ≈ 0R.
 - Catatan: temuan fase ini muncul setelah banyak pengujian; konsisten dengan literatur time-series momentum, tetapi sebagian besar hasil aturan berasal dari 2025. Perlu uji maju.
+
+## Putaran 4: metode dari forum/komunitas (`round4.py`)
+```bash
+python3 round4.py XAUUSD_M5_20240101_20261030.csv   # -> results_round4.csv
+```
+Aturan sama dengan putaran 3 (Agu–Okt 2026 tetap terkunci). Jam New York memakai DST AS.
+
+| Metode | n | R | t | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|---|
+| Momentum harian 20 hari | 784 | +0.043 | 1.60 | +0.008 | +0.067 | +0.059 |
+| ICT Silver Bullet NY PM 14–15 ET | 558 | +0.041 | 0.82 | +0.001 | +0.080 | +0.045 |
+| Connors RSI(2) H4 | 78 | +0.045 | 0.49 | −0.086 | +0.156 | +0.039 |
+| London close reversal | 443 | +0.010 | 0.48 | +0.024 | −0.047 | +0.092 |
+| Inside day breakout | 158 | +0.113 | 0.44 | −0.223 | +0.476 | +0.103 |
+| Connors RSI(2) H1 | 324 | +0.018 | 0.32 | −0.024 | +0.095 | −0.053 |
+| NR7 breakout | 69 | +0.092 | 0.18 | −0.531 | +0.552 | +0.294 |
+| Silver Bullet NY AM 10–11 ET (+ sweep) | 211 | +0.002 | 0.03 | −0.121 | +0.179 | −0.073 |
+| NY opening range 15 menit (1R / 2R) | 656 | ≈ −0.01 | ≈ −0.2 | | | |
+| Silver Bullet London 03–04 ET (+ sweep) | 171 | −0.164 | −1.83 | | | |
+| Turtle Soup M5 | 2.171–2.922 | −0.09…−0.11 | −3.9…−4.8 | | | |
+
+0 dari 17 lolos. Momentum harian dan Silver Bullet NY PM positif tiap tahun tetapi jauh dari t ≥ 3. Turtle Soup (fade false breakout) negatif signifikan: di gold M5 breakout lebih sering berlanjut daripada gagal.

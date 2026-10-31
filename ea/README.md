@@ -181,3 +181,21 @@ Alat bantu baca chart M5 untuk hari biasa. **Bukan sinyal terbukti**: riset 2024
 - **Panah konfluensi**: pola bullish di support (kekuatan ≥ 2) dan tren H1 tidak turun → biru; kebalikannya → oranye. Panah historis hanya memakai level yang sudah ada pada waktu candle itu.
 - **Tanda emas**: awal fase selaras penuh (H4, H1, M15, M5 searah).
 - Backtest kasar 2024–2026 (`research/tmap_*.py`): panah konfluensi ≈ acak, skor kesimpulan tepat arah ~51%; fase selaras penuh satu-satunya yang positif tiap tahun (+$0.55/jam searah tren, t 3.6). Teks "Langkah" di panel memakai hasil ini.
+
+TechnicalMap v1.30: panel pindah ke pojok kanan atas (pojok kiri atas dipakai NewsPullbackArrows) sehingga keduanya bisa dipasang di chart yang sama.
+
+---
+
+# ForwardTestEA (`ForwardTestEA.mq5`, EA, demo saja)
+
+Uji maju otomatis dua hipotesis riset dengan lot kecil (risiko 0.5%/trade):
+
+| Tag | Strategi | Aturan |
+|---|---|---|
+| NP | Pullback saat berita (= NewsPullbackArrows) | jam 07–18, jendela −30/+60 menit berita USD high, tren H1 + pullback EMA20 M5; SL 1.5 ATR, TP 3R, maks 48 candle |
+| AL | Awal selaras penuh (= tanda emas TechnicalMap) | H4, H1, M15, M5 baru searah, jam 07–18; SL 2 ATR tanpa TP; keluar saat M15 tidak searah atau 96 candle |
+
+- Setiap trade selesai ditulis ke `MQL5/Files/forwardtest_log.csv` (profit dan hasil dalam R).
+- Ringkasan per strategi di pojok kiri bawah chart, dibandingkan dengan acuan riset.
+- Menolak berjalan di akun real (`InpDemoOnly`).
+- Pasang di chart XAUUSD M5, aktifkan Algo Trading. Salin `calendar_USD.csv` ke `MQL5/Files` (opsional; kalender MT5 juga dibaca).

@@ -19,7 +19,7 @@
 //| menemukan keunggulan teknikal M5 setelah biaya.                  |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.20"
+#property version   "1.30"
 #property description "Peta teknikal M5: support/resistance, tren multi-TF, pola candle, panah konfluensi."
 #property indicator_chart_window
 #property indicator_buffers 4
@@ -98,7 +98,54 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    ObjectsDeleteAll(0, PFX);
-   Comment("");
+   ChartRedraw();
+  }
+
+//--- panel di pojok kanan atas (pojok kiri atas dipakai NewsPullbackArrows)
+void DrawPanel(const string txt)
+  {
+   string raw[], lines[];
+   int nr = StringSplit(txt, '\n', raw);
+   int n = 0;
+   // OBJ_LABEL maksimal 63 karakter: potong baris panjang di spasi
+   for(int r = 0; r < nr; r++)
+     {
+      string rest = raw[r];
+      bool first = true;
+      while(true)
+        {
+         string part = rest;
+         if(StringLen(rest) > 60)
+           {
+            int cut = 60;
+            while(cut > 20 && StringGetCharacter(rest, cut) != ' ')
+               cut--;
+            part = StringSubstr(rest, 0, cut);
+            rest = StringSubstr(rest, cut + 1);
+           }
+         else
+            rest = "";
+         ArrayResize(lines, n + 1);
+         lines[n++] = (first ? "" : "    ") + part;
+         first = false;
+         if(rest == "")
+            break;
+        }
+     }
+   for(int i = 0; i < n; i++)
+     {
+      string id = PFX + "PANEL_" + IntegerToString(i);
+      ObjectCreate(0, id, OBJ_LABEL, 0, 0, 0);
+      ObjectSetInteger(0, id, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
+      ObjectSetInteger(0, id, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
+      ObjectSetInteger(0, id, OBJPROP_XDISTANCE, 8);
+      ObjectSetInteger(0, id, OBJPROP_YDISTANCE, 18 + i * 13);
+      ObjectSetString(0, id, OBJPROP_FONT, "Consolas");
+      ObjectSetInteger(0, id, OBJPROP_FONTSIZE, 8);
+      ObjectSetInteger(0, id, OBJPROP_COLOR, i == 0 ? clrGold : clrWhiteSmoke);
+      ObjectSetInteger(0, id, OBJPROP_SELECTABLE, false);
+      ObjectSetString(0, id, OBJPROP_TEXT, lines[i]);
+     }
   }
 
 double Buf(const int h, const int shift)
@@ -512,7 +559,7 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
    if(_Period != PERIOD_M5)
      {
       ObjectsDeleteAll(0, PFX);
-      Comment("TechnicalMap: GANTI CHART KE M5.");
+      DrawPanel("TechnicalMap: GANTI CHART KE M5.");
       return rates_total;
      }
    if(rates_total < 300)
@@ -652,7 +699,8 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
    txt += "Support terdekat:\n" + (supTxt == "" ? "  -\n" : supTxt);
    txt += "Backtest 2024-26: panah konfluensi -0.07R/trade (setara acak), kesimpulan skor tepat arah ~51%.\n";
    txt += "Satu-satunya yang konsisten: fase SELARAS PENUH (tanda emas = awal fase). Tetap uji di demo.";
-   Comment(txt);
+   txt += "\nJam berita USD besar: ikuti panel NewsPullbackArrows (kiri atas).";
+   DrawPanel(txt);
 
    if((lastArrow != 0 || lastAlignStart != 0) && time[last] != lastAlert && prev_calculated > 0)
      {
