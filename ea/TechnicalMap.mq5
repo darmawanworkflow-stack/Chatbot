@@ -19,7 +19,7 @@
 //| menemukan keunggulan teknikal M5 setelah biaya.                  |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.30"
+#property version   "1.40"
 #property description "Peta teknikal M5: support/resistance, tren multi-TF, pola candle, panah konfluensi."
 #property indicator_chart_window
 #property indicator_buffers 4
@@ -507,22 +507,22 @@ string SyncText(const int &tr[], const int lastPat, const double price)
       if(m15 == big && m5 == big)
         {
          phase = "SELARAS PENUH: H4, H1, M15, M5 semua " + dir;
-         step = "fase historis TERBAIK (2024-26: +$0.55/jam searah tren, positif tiap tahun). Masuk saat baru selaras & keluar saat M15 berbalik: +0.15R/trade, belum terbukti kuat";
+         step = "fase paling konsisten 2004-26 (t 3.1 di 2004-23), tapi geraknya kecil (~0.015 ATR H1/jam, di bawah biaya). Aturan masuk AL gagal uji 20 tahun (+0.03R, t 0.9)";
         }
       else if(m15 == -big)
         {
          phase = "PULLBACK: tren besar " + dir + ", M15 sedang koreksi berlawanan";
-         step = "historis sedikit negatif (-$0.19/jam searah tren); tunggu sampai selaras penuh";
+         step = "2024-26 sedikit negatif, 2004-23 ~nol; tidak ada keunggulan";
         }
       else if(m15 == 0)
         {
          phase = "PULLBACK MELEMAH: tren besar " + dir + ", M15 transisi";
-         step = "historis TERBURUK (-$0.63/jam searah tren); hindari entry searah tren di fase ini";
+         step = "terburuk di 2024-26, tapi sedikit positif di 2004-23: tidak konsisten";
         }
       else
         {
          phase = "M15 sudah searah " + dir + ", M5 masih koreksi";
-         step = "historis netral (~$0/jam); tanda emas muncul bila M5 ikut searah";
+         step = "2024-26 ~nol, 2004-23 sedikit positif (t 2.2); tanda emas muncul bila M5 ikut searah";
         }
      }
    else if(h4 != 0 && h1 == -h4)
@@ -698,7 +698,7 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
    txt += "Resistance terdekat:\n" + (resTxt == "" ? "  -\n" : resTxt);
    txt += "Support terdekat:\n" + (supTxt == "" ? "  -\n" : supTxt);
    txt += "Backtest 2024-26: panah konfluensi -0.07R/trade (setara acak), kesimpulan skor tepat arah ~51%.\n";
-   txt += "Satu-satunya yang konsisten: fase SELARAS PENUH (tanda emas = awal fase). Tetap uji di demo.";
+   txt += "Uji 20 tahun (2004-23): fase SELARAS PENUH tetap paling konsisten tapi efeknya kecil; aturan masuk AL tidak lolos.";
    txt += "\nJam berita USD besar: ikuti panel NewsPullbackArrows (kiri atas).";
    DrawPanel(txt);
 

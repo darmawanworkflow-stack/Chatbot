@@ -156,3 +156,26 @@ Uji ulang versi yang benar di data M5 kita (`pdhl_sweep.py`): bias = close vs op
 - TP 1R: 290 trade, win 46%, −0.165R/trade (t −2.89); 2024 −0.21R, 2025 −0.31R, 2026 +0.08R.
 - TP 2R: 290 trade, win 35%, −0.172R/trade (t −2.31).
 Sejalan dengan Turtle Soup (putaran 4): melawan breakout di gold M5 merugi.
+
+## Uji di luar sampel 2004–2023 (data Kaggle "XAUUSD Gold Price Historical Data 2004-2024")
+Data 5m dan 4h dari Kaggle (novandraanugrah), dibagikan pengguna lewat Google Drive. Zona waktu data = Europe/Athens (GMT+2, GMT+3 saat DST Eropa), dicocokkan dengan data Exness hari per hari lalu dikonversi ke GMT+0. Data tidak disimpan di repo.
+
+```bash
+python3 oos_align.py k5_utc_2004_2023.csv      # 5m 2004-06 s/d 2023-12, format sama dengan ExportHistory
+python3 daily_long.py kaggle_daily.csv         # harian dari 4h, 2004-2025
+```
+
+**Fase sinkronisasi** (gerak 1 jam searah tren besar, dalam ATR H1, sampel per jam):
+
+| Fase | n | Rata-rata | t | Tahun positif |
+|---|---|---|---|---|
+| Selaras penuh | 30.133 | +0.015 | 3.11 | 14/20 |
+| M15 searah, M5 koreksi | 12.751 | +0.014 | 2.20 | 12/20 |
+| Pullback melemah | 11.054 | +0.008 | 1.05 | 14/20 |
+| Pullback M15 | 11.044 | +0.007 | 1.02 | 13/20 |
+
+Efek selaras penuh bertahan di luar sampel, tetapi kecil (≈ 1/3 dari 2024–2026) dan di bawah biaya per trade. Urutan "pullback melemah terburuk" dari 2024–2026 tidak berulang.
+
+**Aturan AL** (kriteria ditetapkan sebelum melihat hasil: R > 0, t ≥ 2, positif ≥ 12/20 tahun): 6.395 trade, win 21%, +0.032R, t 0.94, positif 10/20 tahun → **TIDAK LOLOS**. BUY −0.001R, SELL +0.077R.
+
+**Harian 2005–2025** (21 tahun, termasuk penurunan 2011–2015): beli & tahan CAGR 11.5%, Sharpe 0.71, max DD −44.8%. Faber SMA 10 bulan + vol target: 11.1%, Sharpe 0.82, DD −38.8%. Momentum 12 bulan long saja + vol target: 11.2%, Sharpe 0.82, DD −35.4%. EMA 20/50 long saja + vol target: 8.8%, Sharpe 0.73, DD −24.7%. Turtle 55/20 long saja + vol target: 7.3%, DD −24.8%. Versi long/short dan Turtle 20/10 jauh lebih buruk. Hasilnya sejalan dengan uji 2016–2026: filter tren mengurangi drawdown dan menaikkan Sharpe, bukan menaikkan CAGR.
