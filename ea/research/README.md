@@ -121,3 +121,27 @@ Masuk saat close menembus high/low N hari, keluar saat menembus low/high M hari 
 | 55/20 buy saja | 5 | 80% | +28.2R | +4.3 | +26.4 | −2.4 |
 
 Sampel terlalu kecil (5–21 trade) dan hasilnya didominasi reli gold 2025; beli-dan-tahan sepanjang periode ≈ +40.5R. Tidak bisa disimpulkan dari data 3 tahun.
+
+## Trend following harian 2016–2026 (`daily_long.py`)
+Data harian XAUUSD Maret 2016 – Oktober 2026 (Stooq, diunduh pengguna; data tidak disimpan di repo). Uji mulai Februari 2017 (setahun pertama pemanasan). Posisi dari close hari t dipegang sampai close t+1, biaya 0.03% per perubahan posisi, **swap tidak dihitung**.
+```bash
+python3 daily_long.py xauusd_d.csv   # -> results_daily_long.csv, results_daily_long_yearly.csv
+```
+
+| Strategi | CAGR | Sharpe | Max DD | Waktu di pasar |
+|---|---|---|---|---|
+| Beli & tahan | 12.5% | 0.79 | −28.4% | 100% |
+| Faber: close > SMA 10 bulan (long saja) + vol target 15% | 12.5% | 0.88 | −31.9% | 73% |
+| SMA 50/200 golden cross (long saja) + vol target | 12.2% | 0.86 | −29.3% | 73% |
+| Momentum 12 bulan (long saja) + vol target | 10.8% | 0.77 | −34.4% | 74% |
+| EMA 20/50 harian (long saja) + vol target | 9.6% | 0.75 | −27.7% | 56% |
+| Turtle 55/20 (long saja) + vol target | 8.5% | 0.74 | −18.4% | 44% |
+| EMA 20/50 harian (long/short) | 5.1% | 0.39 | −34.6% | 85% |
+| Momentum 12 bulan (long/short) | 4.5% | 0.34 | −44.9% | 100% |
+| Turtle 20/10 (long/short) | −0.5% | 0.04 | −45.7% | 77% |
+
+- Tidak ada aturan tren yang mengalahkan beli & tahan dalam CAGR; versi long saja + vol target menyamai CAGR dengan Sharpe sedikit lebih tinggi.
+- Sisi jual (short) merugikan di gold 2016–2026 karena kecenderungan naik jangka panjang.
+- Turtle 55/20 long saja: CAGR lebih rendah tetapi drawdown terkecil (−18%) dan hanya 44% waktu di pasar.
+- Di 2026 (beli & tahan −10%), filter tren mengurangi kerugian (EMA 20/50 long/short +12%).
+- Untuk CFD, swap menginap bisa memakan beberapa persen per tahun; angka di atas lebih mewakili emas fisik/ETF.
