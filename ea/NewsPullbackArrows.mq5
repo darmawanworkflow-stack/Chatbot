@@ -19,7 +19,7 @@
 //| HIPOTESIS, BELUM TERBUKTI. Untuk uji maju di akun demo.          |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.01"
+#property version   "1.02"
 #property description "Panah pullback M5 di jendela berita USD. Hipotesis riset, uji di demo."
 #property indicator_chart_window
 #property indicator_buffers 4
@@ -426,7 +426,7 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
    bool nowIn = InNewsWindow(TimeCurrent(), nowName);
    int nk = NewsLowerBound(TimeCurrent());
    string nextTxt = nk < ArraySize(newsT) ? TimeToString(newsT[nk], TIME_DATE | TIME_MINUTES) + " " + newsName[nk] : "tidak ada di jadwal";
-   string txt = "NewsPullbackArrows (HIPOTESIS - uji di demo)\n";
+   string txt = "NewsPullbackArrows (GAGAL uji 2007-2023: -0.13R/trade, positif 2/17 tahun)\n";
    txt += nowIn ? "JENDELA BERITA AKTIF: " + nowName + "\n" : "Di luar jendela berita - saran: tidak trading\n";
    txt += "Berita high berikutnya: " + nextTxt + "\n";
    txt += StringFormat("Riwayat di chart, saat berita: %d sinyal, win %.0f%%, total %+.1fR, rata-rata %+.3fR\n",

@@ -189,3 +189,18 @@ Tester MT5: XAUUSD M5, 2024.01.01–2026.10.29, deposit 10000, risiko 0.5%, inpu
 | NP | 520 trade, win 33%, +0.120R (2024 +0.143, 2025 −0.050, 2026 +0.306) | ~500 trade, +0.063R (s/d Des 2025) / +0.238R (sesudahnya) |
 
 EA menjalankan aturan yang sama dengan riset (selisih wajar karena spread/eksekusi tester). Periode ini adalah periode penemuan kedua hipotesis, jadi profit di tester **bukan** bukti keunggulan; AL sudah gagal uji 2004–2023.
+
+## Uji di luar sampel NP 2007–2023 (`oos_news.py`, `oos_news_cost.py`)
+Kalender USD dari MT5 Exness tersedia sejak Januari 2007 (`ExportCalendar` dengan tanggal mulai 2004.01.01). Data harga Kaggle 5m (GMT+0). Aturan NP tidak diubah. Kriteria (ditetapkan sebelum melihat hasil): R > 0, t ≥ 2, positif ≥ 10/17 tahun.
+```bash
+python3 oos_news.py k5_utc_2004_2023.csv calendar_USD.csv
+python3 oos_news_cost.py k5_utc_2004_2023.csv calendar_USD.csv   # biaya proporsional & tanpa biaya
+```
+
+| Biaya | NP: trade | Rata-rata | t | Tahun positif | PB di luar berita |
+|---|---|---|---|---|---|
+| $0.25 tetap | 2.966 | −0.126R | −4.30 | 2/17 | −0.117R (0/17) |
+| proporsional harga | 2.966 | −0.064R | −2.20 | 5/17 | −0.030R (8/17) |
+| tanpa biaya | 2.966 | −0.019R | −0.66 | 7/17 | +0.029R (12/17) |
+
+**NP TIDAK LOLOS**, bahkan sebelum biaya. Hasil positif 2024–2026 adalah kebetulan periode itu. Kedua hipotesis yang tersisa (AL dan NP) gugur di data 2004/2007–2023.
