@@ -109,3 +109,15 @@ Fase selaras penuh (H4, H1, M15, M5 searah), gerak 1 jam ke depan searah tren be
 | 50/200 | 5624 | +0.50 | 3.76 | +0.05 | +0.57 | +0.95 |
 
 Efeknya bertahan di semua pasangan EMA (tidak bergantung pada pilihan 20/50). Per rezim volatilitas (ATR H1 vs median 30 hari): rendah +$0.73 (t 2.39), normal +$0.33 (t 1.71, 2025 −0.02), tinggi +$0.86 (t 2.40). Tidak cukup jelas untuk dijadikan filter.
+
+## Trend following harian ala Turtle (`daily_trend.py`)
+Masuk saat close menembus high/low N hari, keluar saat menembus low/high M hari lawan, R = 2 × ATR(20) harian, biaya $0.40/trade.
+
+| Breakout | Trade | Win | Total | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|---|
+| 20/10 buy+sell | 21 | 43% | +12.1R | −0.8 | +11.7 | +1.2 |
+| 20/10 buy saja | 13 | 46% | +15.6R | +3.8 | +12.6 | −0.9 |
+| 55/20 buy+sell | 7 | 71% | +28.0R | +4.3 | +26.4 | −2.6 |
+| 55/20 buy saja | 5 | 80% | +28.2R | +4.3 | +26.4 | −2.4 |
+
+Sampel terlalu kecil (5–21 trade) dan hasilnya didominasi reli gold 2025; beli-dan-tahan sepanjang periode ≈ +40.5R. Tidak bisa disimpulkan dari data 3 tahun.
