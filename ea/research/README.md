@@ -145,3 +145,14 @@ python3 daily_long.py xauusd_d.csv   # -> results_daily_long.csv, results_daily_
 - Turtle 55/20 long saja: CAGR lebih rendah tetapi drawdown terkecil (−18%) dan hanya 44% waktu di pasar.
 - Di 2026 (beli & tahan −10%), filter tren mengurangi kerugian (EMA 20/50 long/short +12%).
 - Untuk CFD, swap menginap bisa memakan beberapa persen per tahun; angka di atas lebih mewakili emas fisik/ETF.
+
+## Cek repo ikeawesom/xauusd-backtest (PDH/PDL sweep, klaim win rate ~70%)
+Kode dibaca (tidak dijalankan). Masalah yang ditemukan:
+- `ExtractTrades.py` baris 20: `change = open - close`, sehingga hari turun dianggap "bullish" (bias terbalik).
+- `TradeSimulation.py`: target = titik sweep, yang berada di/bawah harga entry untuk BUY (di/atas untuk SELL). Trade dihitung "WIN" bila harga tidak menembus titik sweep, walaupun keluar rugi. Yang diukur bukan profit.
+- Hanya memakai harga open tiap bar (high/low diabaikan), tanpa P/L, R, spread, atau komisi.
+
+Uji ulang versi yang benar di data M5 kita (`pdhl_sweep.py`): bias = close vs open hari sebelumnya, sweep PDL/PDH lalu candle tutup kembali di dalam range, SL di luar ekstrem sweep, TP 1R/2R, maks 1 trade/hari:
+- TP 1R: 290 trade, win 46%, −0.165R/trade (t −2.89); 2024 −0.21R, 2025 −0.31R, 2026 +0.08R.
+- TP 2R: 290 trade, win 35%, −0.172R/trade (t −2.31).
+Sejalan dengan Turtle Soup (putaran 4): melawan breakout di gold M5 merugi.
