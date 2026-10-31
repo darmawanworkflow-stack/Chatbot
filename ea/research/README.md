@@ -179,3 +179,13 @@ Efek selaras penuh bertahan di luar sampel, tetapi kecil (≈ 1/3 dari 2024–20
 **Aturan AL** (kriteria ditetapkan sebelum melihat hasil: R > 0, t ≥ 2, positif ≥ 12/20 tahun): 6.395 trade, win 21%, +0.032R, t 0.94, positif 10/20 tahun → **TIDAK LOLOS**. BUY −0.001R, SELL +0.077R.
 
 **Harian 2005–2025** (21 tahun, termasuk penurunan 2011–2015): beli & tahan CAGR 11.5%, Sharpe 0.71, max DD −44.8%. Faber SMA 10 bulan + vol target: 11.1%, Sharpe 0.82, DD −38.8%. Momentum 12 bulan long saja + vol target: 11.2%, Sharpe 0.82, DD −35.4%. EMA 20/50 long saja + vol target: 8.8%, Sharpe 0.73, DD −24.7%. Turtle 55/20 long saja + vol target: 7.3%, DD −24.8%. Versi long/short dan Turtle 20/10 jauh lebih buruk. Hasilnya sejalan dengan uji 2016–2026: filter tren mengurangi drawdown dan menaikkan Sharpe, bukan menaikkan CAGR.
+
+## Verifikasi ForwardTestEA di Strategy Tester (`ft_report.py`)
+Tester MT5: XAUUSD M5, 2024.01.01–2026.10.29, deposit 10000, risiko 0.5%, input default (History Quality 17% real ticks). Transaksi masuk/keluar dipasangkan per strategi lewat arah dan volume (14 dari 1.422 ambigu).
+
+| | EA di tester | Riset Python |
+|---|---|---|
+| AL | 902 trade, win 25%, +0.144R (2024 −0.009, 2025 +0.386, 2026 +0.038) | 896 trade, +0.193R (2024 +0.074, 2025 +0.435, 2026 +0.047) |
+| NP | 520 trade, win 33%, +0.120R (2024 +0.143, 2025 −0.050, 2026 +0.306) | ~500 trade, +0.063R (s/d Des 2025) / +0.238R (sesudahnya) |
+
+EA menjalankan aturan yang sama dengan riset (selisih wajar karena spread/eksekusi tester). Periode ini adalah periode penemuan kedua hipotesis, jadi profit di tester **bukan** bukti keunggulan; AL sudah gagal uji 2004–2023.
