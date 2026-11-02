@@ -175,7 +175,7 @@ Panah sinyal M5 untuk satu-satunya hipotesis yang tersisa dari riset (`ea/resear
 Alat bantu baca chart M5 untuk hari biasa. **Bukan sinyal terbukti**: riset 2024–2026 tidak menemukan keunggulan teknikal M5 setelah biaya.
 
 - **Support & Resistance**: swing H1 (10 hari) & H4 (30 hari), high/low kemarin, pivot harian (P, R1, S1), high/low sesi Asia, angka bulat $50. Level yang berjarak ≤ 0.35 ATR H1 digabung; bintang = kekuatan (jumlah bobot sumber).
-- **Panel**: tren M5/M15/H1/H4 (close vs EMA50 & EMA20 vs EMA50) + RSI, kesimpulan arah (skor dari tren M15/H1/H4, pola candle terakhir, posisi di support/resistance, RSI M5), 3 support & 3 resistance terdekat.
+- **Panel** (ringkas secara default, `InpCompactPanel = false` untuk lengkap): tren M5/M15/H1/H4 (close vs EMA50 & EMA20 vs EMA50) + RSI, kesimpulan arah (skor dari tren M15/H1/H4, pola candle terakhir, posisi di support/resistance, RSI M5), 3 support & 3 resistance terdekat.
 - **Sinkronisasi antar timeframe**: fase pasar dari hubungan H4/H1 (tren besar), M15 (koreksi) dan M5 (pemicu): selaras penuh, pullback M15, pullback melemah, konflik H4 vs H1; langkah berikutnya; candle H1/H4 yang sedang berjalan (warna, % waktu, posisi harga di range candle); posisi harga di range harian (premium/discount).
 - **Pola candle M5**: Engulf, Hammer, ShootStar, MorningStar, EveningStar, Inside, Doji.
 - **Panah konfluensi**: pola bullish di support (kekuatan ≥ 2) dan tren H1 tidak turun → biru; kebalikannya → oranye. Panah historis hanya memakai level yang sudah ada pada waktu candle itu.

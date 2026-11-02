@@ -19,7 +19,7 @@
 //| menemukan keunggulan teknikal M5 setelah biaya.                  |
 //+------------------------------------------------------------------+
 #property copyright "Chatbot repo"
-#property version   "1.40"
+#property version   "1.50"
 #property description "Peta teknikal M5: support/resistance, tren multi-TF, pola candle, panah konfluensi."
 #property indicator_chart_window
 #property indicator_buffers 4
@@ -48,6 +48,7 @@ input double InpTouchATR     = 0.30;         // Candle dianggap "di level" bila 
 input int    InpMaxLevels    = 5;            // Maks level ditampilkan per sisi (support / resistance)
 input int    InpPatternBars  = 150;          // Label pola & panah untuk N candle terakhir
 input bool   InpLabelPatterns= true;         // Tampilkan nama pola candle
+input bool   InpCompactPanel = true;         // Panel ringkas (false = panel lengkap)
 input bool   InpAlert        = false;        // Alert saat panah konfluensi / awal selaras baru
 input bool   InpPush         = false;        // Notifikasi HP saat panah konfluensi / awal selaras baru
 input color  InpSupColor     = clrMediumSeaGreen; // Warna support
@@ -690,17 +691,36 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
      }
    string bias = score >= 2 ? "CONDONG NAIK" : (score <= -2 ? "CONDONG TURUN" : "NETRAL / tunggu");
 
+   string sync = SyncText(trs, lastPat, price);
+   if(InpCompactPanel)
+     {
+      string trShort = "";
+      for(int k = 0; k < 4; k++)
+         trShort += StringFormat("%s %s %.0f%s", TFN[k], trs[k] > 0 ? "NAIK" : (trs[k] < 0 ? "TURUN" : "datar"),
+                                 Buf(hRsi[k], 1), k < 3 ? " | " : "");
+      int nl = StringFind(sync, "\n");
+      string phaseLine = nl > 0 ? StringSubstr(sync, 0, nl) : sync;
+      StringReplace(phaseLine, "Sinkronisasi TF: ", "Fase: ");
+      string cp = "TechnicalMap M5 (alat baca chart, bukan sinyal)\n";
+      cp += trShort + "\n";
+      cp += StringFormat("Kesimpulan: %s (skor %+d)\n", bias, score);
+      cp += phaseLine + "\n";
+      cp += StringFormat("Candle terakhir: %s\n", lastPatName == "" ? "tanpa pola" : lastPatName);
+      cp += StringFormat("Resistance %.2f | Support %.2f", nearRes, nearSup);
+      DrawPanel(cp);
+     }
    string txt = "TechnicalMap M5 - alat bantu baca chart (bukan sinyal terbukti)\n";
    txt += trendTxt + "\n";
    txt += StringFormat("Kesimpulan: %s (skor %+d)  alasan: %s\n", bias, score, why == "" ? "-" : why);
-   txt += SyncText(trs, lastPat, price);
+   txt += sync;
    txt += StringFormat("Candle terakhir: %s\n", lastPatName == "" ? "tanpa pola" : lastPatName);
    txt += "Resistance terdekat:\n" + (resTxt == "" ? "  -\n" : resTxt);
    txt += "Support terdekat:\n" + (supTxt == "" ? "  -\n" : supTxt);
    txt += "Backtest 2024-26: panah konfluensi -0.07R/trade (setara acak), kesimpulan skor tepat arah ~51%.\n";
    txt += "Uji 20 tahun (2004-23): fase SELARAS PENUH tetap paling konsisten tapi efeknya kecil; aturan masuk AL tidak lolos.";
    txt += "\nJam berita USD besar: ikuti panel NewsPullbackArrows (kiri atas).";
-   DrawPanel(txt);
+   if(!InpCompactPanel)
+      DrawPanel(txt);
 
    if((lastArrow != 0 || lastAlignStart != 0) && time[last] != lastAlert && prev_calculated > 0)
      {
