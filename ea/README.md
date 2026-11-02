@@ -199,3 +199,14 @@ Uji maju otomatis dua hipotesis riset dengan lot kecil (risiko 0.5%/trade):
 - Ringkasan per strategi di pojok kiri bawah chart, dibandingkan dengan acuan riset.
 - Menolak berjalan di akun real (`InpDemoOnly`).
 - Pasang di chart XAUUSD M5, aktifkan Algo Trading. Salin `calendar_USD.csv` ke `MQL5/Files` (opsional; kalender MT5 juga dibaca).
+
+---
+
+# DailyTrendStatus (`DailyTrendStatus.mq5`, indikator)
+
+Status tren harian gold untuk investasi jangka panjang: **PEGANG** bila ≥ 2 dari 3 aturan setuju (close > SMA 210 hari, EMA20 > EMA50 & close > EMA50, close > close 12 bulan lalu), selain itu **KELUAR**. Dihitung dari candle harian yang sudah tutup; cukup dicek seminggu sekali.
+
+- Panel kanan bawah: status, tiap aturan beserta levelnya dan tanggal terakhir berubah, volatilitas 20 hari, porsi saran (15% ÷ volatilitas, maks 100%).
+- Di chart D1 menggambar SMA 210, EMA 20, EMA 50.
+- Alert & notifikasi HP saat status PEGANG/KELUAR berubah.
+- Uji 2005–2025 tanpa leverage (`research/daily_vote.py`): 8.7%/tahun, max drawdown −27% (beli & tahan: 11.5%, −45%). Hanya sisi beli. Untuk CFD, swap menginap tidak termasuk.

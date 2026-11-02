@@ -204,3 +204,19 @@ python3 oos_news_cost.py k5_utc_2004_2023.csv calendar_USD.csv   # biaya propors
 | tanpa biaya | 2.966 | −0.019R | −0.66 | 7/17 | +0.029R (12/17) |
 
 **NP TIDAK LOLOS**, bahkan sebelum biaya. Hasil positif 2024–2026 adalah kebetulan periode itu. Kedua hipotesis yang tersisa (AL dan NP) gugur di data 2004/2007–2023.
+
+## Aturan gabungan DailyTrendStatus (`daily_vote.py`)
+PEGANG bila ≥ 2 dari 3 aturan (close > SMA 210, EMA20 > EMA50 & close > EMA50, close > close 252 hari lalu); hanya beli. Argumen kedua `daily_long.py` / `daily_vote.py` = porsi maksimum (1.0 = tanpa leverage; tabel sebelumnya memakai 2.0).
+```bash
+python3 daily_vote.py kaggle_daily.csv 1.0
+```
+
+| Tanpa leverage | 2005–2025 (Kaggle) | | 2017–2026 (Stooq) | |
+|---|---|---|---|---|
+| | CAGR / Sharpe | Max DD | CAGR / Sharpe | Max DD |
+| Beli & tahan | 11.5% / 0.71 | −44.9% | 12.5% / 0.79 | −28.4% |
+| Gabungan ≥ 2/3 | 8.5% / 0.65 | −33.5% | 9.3% / 0.68 | −25.2% |
+| Gabungan ≥ 2/3 + porsi vol (maks 100%) | 8.7% / 0.77 | −27.0% | 8.6% / 0.74 | −23.9% |
+| Faber SMA 10 bulan + porsi vol | 8.7% / 0.77 | −29.7% | 9.2% / 0.79 | −26.8% |
+
+Menukar ~3%/tahun pertumbuhan dengan drawdown maksimum yang jauh lebih kecil.

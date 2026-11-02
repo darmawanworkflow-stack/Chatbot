@@ -13,6 +13,7 @@ D = pd.read_csv(sys.argv[1], parse_dates=['Date']).set_index('Date').sort_index(
 c, h, l = D.Close, D.High, D.Low
 ret = c.pct_change().fillna(0)
 COST = 0.0003
+CAP = float(sys.argv[2]) if len(sys.argv) > 2 else 2.0
 
 def ema(x, n):
     return x.ewm(span=n, adjust=False).mean()
@@ -49,7 +50,7 @@ S = {
     'Turtle 55/20 (long saja)': turtle(55, 20, True),
 }
 vol20 = ret.rolling(20).std() * np.sqrt(252)
-scale = (0.15 / vol20).clip(upper=2.0).fillna(0)
+scale = (0.15 / vol20).clip(upper=CAP).fillna(0)
 
 def perf(pos, vt=False):
     p = pos * (scale if vt else 1.0)
